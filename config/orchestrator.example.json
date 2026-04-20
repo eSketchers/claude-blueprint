@@ -49,6 +49,15 @@
     "env": {}
   },
 
+  "digest": {
+    "_comment_1": "Daily rollup. Orchestrator fires once per day at 'time' (local, 24h HH:MM).",
+    "_comment_2": "Also runnable on demand: ./scripts/daily-digest.sh --send",
+    "enabled": true,
+    "time": "17:00",
+    "send": true,
+    "write": true
+  },
+
   "notifier": {
     "slack": {
       "_comment": "Create an incoming webhook in Slack, export the URL to the env var below, then orchestrator will post there.",

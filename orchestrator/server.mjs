@@ -9,7 +9,7 @@
 //   5. Tails ~/.claude-agency/events.jsonl for blocker / completion events
 //   6. Routes to the notifier (Slack / console)
 
-import { existsSync, readFileSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -20,6 +20,7 @@ import { spawnTicketAgent } from './spawn.mjs';
 import { fetchGithub }     from './sources/github.mjs';
 import { fetchFilesystem, archiveFilesystemTicket } from './sources/filesystem.mjs';
 import { detectStuck }     from './stuck-detector.mjs';
+import { buildDigest, formatMarkdown } from './digest.mjs';
 
 const CONFIG_PATH = process.env.AGENCY_ORCH_CONFIG || resolve('config/orchestrator.json');
 const HOME        = process.env.CLAUDE_AGENCY_HOME || join(homedir(), '.claude-agency');
@@ -290,11 +291,53 @@ function tailEvents() {
 
 const TICK = Number(config.tick_interval_ms || 60_000);
 
+// ---------- Digest auto-schedule ----------
+
+function dayKey(ts = Date.now()) { return new Date(ts).toISOString().slice(0, 10); }
+
+async function digestTick() {
+  const d = config.digest;
+  if (!d?.enabled || !d.time) return;
+
+  const [hh, mm] = String(d.time).split(':').map(Number);
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return;
+
+  const now = new Date();
+  const target = new Date(now); target.setHours(hh, mm, 0, 0);
+  if (now < target) return;
+
+  const today = dayKey(Date.now());
+  if (registry.state.last_digest_sent === today) return;
+
+  const digest = buildDigest({ home: HOME, date: today, config });
+  const md = formatMarkdown(digest);
+
+  if (d.write !== false) {
+    try {
+      const dir = join(HOME, 'digests');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, `${today}.md`), md);
+    } catch {}
+  }
+
+  if (d.send !== false) {
+    await notifier.notify('info', {
+      title: `Agency daily — ${today}`,
+      body: md,
+    });
+  }
+
+  registry.state.last_digest_sent = today;
+  registry._flush();
+  console.log(`[digest] sent for ${today} (${digest.counts.completed} done, ${digest.counts.blocked} blocked, ${digest.counts.active} active)`);
+}
+
 async function tick() {
   try {
     await intakeTick();
     tailEvents();
     stuckTick();
+    await digestTick();
     const warn = budget.checkThresholds();
     if (warn?.warn) await notifier.notify('budget_cap', { title: warn.reason });
   } catch (e) {

@@ -8,6 +8,7 @@ import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, watch,
 import { join, dirname, resolve, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { buildDigest, formatMarkdown } from '../orchestrator/digest.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.AGENCY_PORT || 7842);
@@ -219,6 +220,16 @@ const server = createServer(async (req, res) => {
     if (!existsSync(EVENTS)) { res.writeHead(200); return res.end(''); }
     res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
     return createReadStream(EVENTS).pipe(res);
+  }
+
+  if (url.pathname === '/api/digest') {
+    const date = url.searchParams.get('date') || new Date().toISOString().slice(0, 10);
+    const cfgPath = process.env.AGENCY_ORCH_CONFIG;
+    const config  = cfgPath && existsSync(cfgPath)
+      ? JSON.parse(readFileSync(cfgPath, 'utf8')) : {};
+    const digest  = buildDigest({ home: HOME, date, config });
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    return res.end(JSON.stringify({ ...digest, markdown: formatMarkdown(digest) }));
   }
 
   if (url.pathname === '/api/health') {

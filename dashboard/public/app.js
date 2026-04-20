@@ -129,7 +129,40 @@ async function tick() {
     const state = await r.json();
     render(state);
   } catch {/* transient network errors are fine */}
+  try {
+    const r = await fetch('/api/digest');
+    if (r.ok) renderDigest(await r.json());
+  } catch {}
 }
+
+function renderDigest(d) {
+  $('#digest-date').textContent = d.date;
+  const c = d.counts || {};
+  const spend = d.daily_cap_usd != null
+    ? `$${(d.spend_today_usd||0).toFixed(2)} / $${d.daily_cap_usd}`
+    : `$${(d.spend_today_usd||0).toFixed(2)}`;
+  $('#digest-summary').innerHTML = `
+    <span class="stat"><b>${c.picked_up||0}</b> picked up</span>
+    <span class="stat"><b class="ok">${c.completed||0}</b> done</span>
+    <span class="stat"><b class="warn">${c.blocked||0}</b> blocked</span>
+    <span class="stat"><b class="warn">${c.stuck||0}</b> stuck</span>
+    <span class="stat"><b>${c.active||0}</b> active</span>
+    <span class="stat"><b class="danger">${c.halted||0}</b> halted</span>
+    <span class="stat">💰 ${spend}</span>
+  `;
+  $('#digest-md').textContent = d.markdown || '';
+}
+
+// "Send now" — on-demand digest delivery (uses the orchestrator's Slack webhook).
+// Client-only handler: hits the digest endpoint to render, then advises the user
+// to `./scripts/daily-digest.sh --send` for Slack delivery (dashboard alone can't
+// call notifier because it doesn't hold the webhook URL).
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('digest-send');
+  if (btn) btn.addEventListener('click', () => {
+    toast('To send to Slack, run:  node orchestrator/digest.mjs --send  (or cron the same)');
+  });
+});
 
 function toast(msg, ms = 4500) {
   let t = document.getElementById('toast');

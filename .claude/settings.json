@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(npm:*)",
+      "Bash(yarn:*)",
+      "Bash(pnpm:*)",
+      "Bash(pip:*)",
+      "Bash(pipx:*)",
+      "Bash(uv:*)",
+      "Bash(pytest:*)",
+      "Bash(jest:*)",
+      "Bash(flake8:*)",
+      "Bash(eslint:*)",
+      "Bash(prettier:*)",
+      "Bash(pre-commit:*)",
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)",
+      "Bash(gh:*)",
+      "Bash(ast-grep:*)",
+      "Read(*)",
+      "Write(*)",
+      "Edit(*)",
+      "Glob(*)",
+      "Grep(*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)",
+      "Write(.env*)",
+      "Write(**/*credentials*)",
+      "Write(**/*secret*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pre-commit run --files \"$CLAUDE_TOOL_FILE_PATH\" 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[blueprint] session ended — run graphify rebuild if schema changed'"
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "BLUEPRINT_VERSION": "1.0.0"
+  }
+}

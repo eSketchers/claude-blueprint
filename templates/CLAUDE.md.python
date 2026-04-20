@@ -1,0 +1,89 @@
+# Claude Code Configuration — Python Project
+
+## Project identity
+
+- **Language**: Python 3.11+
+- **Package manager**: `uv` (preferred) / `pip`
+- **Lint**: Flake8 + Black + isort (enforced via pre-commit)
+- **Test**: pytest + pytest-cov
+- **Type-check**: mypy (strict where feasible)
+
+## Behavioral rules (always enforced)
+
+- Do what was asked — nothing more, nothing less.
+- NEVER create files unless necessary. Prefer editing existing ones.
+- NEVER create docs/`*.md`/README files unless explicitly requested.
+- ALWAYS read a file before editing it.
+- NEVER commit secrets, credentials, or `.env` files.
+
+## TDD workflow (mandatory for bugs + new features)
+
+1. Write a **failing test** first. Run it. See it fail.
+2. Write the minimum code to make it pass.
+3. Refactor. Keep tests green.
+
+If TDD is impractical (e.g. CLI smoke test, config migration), state why before implementing.
+
+## Code conventions
+
+- **Style**: PEP 8 via Flake8 — `max-line-length = 100`, `ignore = E203, W503` (Black compat).
+- **Formatting**: Black (88 cols default overridden to 100), isort with `profile = "black"`.
+- **Types**: type hints on all public functions. `from __future__ import annotations` at top of each module.
+- **Docstrings**: Google style, only when the WHY is non-obvious.
+- **File naming**: `snake_case.py`. Classes `PascalCase`. Functions/vars `snake_case`. Constants `UPPER_SNAKE`.
+- **Imports**: absolute imports from package root. No wildcard imports.
+
+## File organization
+
+- `/src/<package>/` — source
+- `/tests/` — mirrors src layout (`tests/test_foo.py` tests `src/foo.py`)
+- `/scripts/` — one-off utilities
+- `/docs/` — markdown docs
+- Never put working files in the repo root
+
+## Build & test
+
+```bash
+# Install
+uv sync  # or: pip install -e ".[dev]"
+
+# Lint + format
+pre-commit run --all-files
+flake8 src tests
+black src tests
+isort src tests
+
+# Type-check
+mypy src
+
+# Test
+pytest                          # all
+pytest tests/test_foo.py -xvs   # single file
+pytest --cov=src --cov-report=term-missing
+```
+
+Run ALL of: `pre-commit run --all-files && pytest` before reporting a task complete.
+
+## Pre-commit hooks
+
+Install once per clone: `pre-commit install`. Config lives at `.pre-commit-config.yaml` (copy from `pre-commit/.pre-commit-config.python.yaml` in the blueprint).
+
+## Git
+
+- Branch from `main` / `develop`. Conventional commits: `feat(scope): ...`, `fix(scope): ...`, `test(scope): ...`, `chore(scope): ...`.
+- One feature per PR. Rebase, don't merge-commit.
+- **Use git worktrees** for parallel tracks: `git worktree add ../proj-feat-x feat/x`. Never stash-and-swap on one checkout.
+
+## Security
+
+- Input validation via `pydantic` at system boundaries.
+- Parameterized queries only — never f-string SQL.
+- Secrets via env vars + `pydantic-settings`. Never in source.
+- Sanitize file paths for any upload / download endpoint.
+
+## When working on this project
+
+- Use **serena** MCP for code navigation before grepping large modules.
+- Use **context7** MCP for up-to-date docs of third-party libraries.
+- Use **playwright** MCP only if this project has a web UI.
+- Invoke the `tester` subagent for writing test suites, the `reviewer` subagent for pre-PR review.

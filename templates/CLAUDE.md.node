@@ -1,0 +1,77 @@
+# Claude Code Configuration — Node / TypeScript
+
+## Project identity
+
+- **Language**: TypeScript 5.x, Node 20+
+- **Package manager**: pnpm (preferred) / npm / yarn — check `packageManager` in package.json
+- **Lint**: ESLint (flat config) + Prettier
+- **Test**: Vitest (preferred) or Jest
+- **Build**: tsup / tsc
+
+## Behavioral rules (always enforced)
+
+- Do what was asked — nothing more, nothing less.
+- NEVER create files unless necessary. Prefer editing existing ones.
+- NEVER create docs/`*.md`/README files unless explicitly requested.
+- ALWAYS read a file before editing it.
+- NEVER commit secrets, credentials, or `.env` files.
+
+## TDD workflow (mandatory for bugs + new features)
+
+1. Write a **failing test** first.
+2. Implement minimum code to pass.
+3. Refactor with tests green.
+
+## Code conventions
+
+- **Style**: ESLint + Prettier enforced via pre-commit. No manual style debates.
+- **Types**: `strict: true`, `noImplicitAny: true`, `noUncheckedIndexedAccess: true`. Prefer `unknown` over `any`.
+- **File naming**: `kebab-case.ts`. Classes/types `PascalCase`. Functions/vars `camelCase`. Constants `UPPER_SNAKE`.
+- **Exports**: prefer named exports over default.
+- **Async**: `async/await` — no raw `.then()` chains except at adapter boundaries.
+- **Error handling**: typed error classes; never `throw new Error("...")` without a discriminant.
+
+## File organization
+
+- `/src/` — source, grouped by feature / bounded context
+- `/tests/` — integration + e2e (co-locate unit tests next to source as `*.test.ts`)
+- `/scripts/` — one-off utilities
+- Keep files under 500 lines.
+
+## Build & test
+
+```bash
+pnpm install
+pnpm lint           # eslint --max-warnings 0
+pnpm format         # prettier --write
+pnpm typecheck      # tsc --noEmit
+pnpm test           # unit + integration
+pnpm test:e2e       # playwright
+pnpm build
+```
+
+Run `pnpm lint && pnpm typecheck && pnpm test` before reporting done.
+
+## Pre-commit hooks
+
+`pre-commit install` once per clone. Config at `.pre-commit-config.yaml` — copy from `pre-commit/.pre-commit-config.node.yaml` in the blueprint.
+
+## Git
+
+- Conventional commits: `feat(scope): ...`, `fix(scope): ...`.
+- One feature per PR. Rebase-only; no merge commits on feature branches.
+- **Use git worktrees** for parallel tracks: `git worktree add ../proj-feat-x feat/x`.
+
+## Security
+
+- Validate every external input with `zod` or `valibot` at the boundary (HTTP handler, CLI arg parser).
+- No `eval`, no `new Function()`.
+- Secrets via env vars loaded through a typed config module.
+- SQL via parameterized queries or query builder (Knex / Drizzle / Prisma).
+
+## Tooling notes
+
+- **serena** MCP for semantic search in large codebases.
+- **context7** MCP for Node library docs.
+- **playwright** MCP for browser E2E if this is a web app.
+- Subagents: invoke `coder` for implementation, `tester` for test suites, `reviewer` before PR.

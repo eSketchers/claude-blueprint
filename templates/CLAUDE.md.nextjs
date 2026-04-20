@@ -1,0 +1,80 @@
+# Claude Code Configuration — Next.js
+
+## Project identity
+
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript 5.x, React 19
+- **Package manager**: pnpm preferred
+- **Lint**: ESLint (`next/core-web-vitals`) + Prettier
+- **Test**: Vitest (unit) + Playwright (E2E)
+- **Styling**: Tailwind CSS (assume unless package.json says otherwise)
+
+## Behavioral rules (always enforced)
+
+- Do what was asked — nothing more, nothing less.
+- NEVER create files unless necessary. Prefer editing existing ones.
+- NEVER create docs/`*.md`/README files unless explicitly requested.
+- ALWAYS read a file before editing it.
+- NEVER commit secrets or `.env*` files.
+
+## App Router conventions
+
+- Server Components by default. `"use client"` only when a component needs state, effects, or browser APIs.
+- Data fetching: `fetch` in Server Components with `{ cache, next: { revalidate } }`. Never fetch in Client Components unless you need interactivity on the response.
+- **Server Actions** for mutations. Validate inputs with `zod`.
+- Route handlers in `app/api/**/route.ts`. Return `NextResponse.json(...)`.
+- Loading / error boundaries: add `loading.tsx` and `error.tsx` for every non-trivial route.
+- Metadata: export `generateMetadata` for dynamic routes.
+
+## Edge Runtime caveats
+
+- `fetch` in Edge Runtime cannot reach arbitrary hosts through a broken DNS — confirm nginx upstream names resolve from the container.
+- No Node-specific APIs (`fs`, `path`) in Edge handlers.
+
+## Code conventions
+
+- **Types**: `strict: true`. Shared types in `types/` or co-located `*.types.ts`.
+- **File naming**: `kebab-case.tsx` for components, `page.tsx` / `layout.tsx` / `route.ts` for App Router primitives. React component name `PascalCase`.
+- **Styling**: Tailwind utility classes. Extract to a component when the utility string exceeds ~8 classes and repeats.
+- No inline styles except dynamic values.
+
+## Testing
+
+- **Unit**: Vitest + React Testing Library. Test rendered output + user interactions, not implementation details.
+- **E2E**: Playwright via the MCP. Cover: golden path, unauthenticated redirect, form validation error.
+- Server Components: prefer E2E over unit tests — they don't mount like client components.
+
+```bash
+pnpm dev            # http://localhost:3000
+pnpm lint
+pnpm typecheck
+pnpm test           # vitest
+pnpm test:e2e       # playwright
+pnpm build          # verify production build before PR
+```
+
+## TDD workflow
+
+1. Failing test (unit or Playwright) first.
+2. Implement until green.
+3. Refactor, re-run.
+
+## UI verification requirement
+
+For any UI change, start the dev server and manually exercise the feature in a browser before reporting the task done. `pnpm build` passing ≠ feature working. Say so explicitly if you cannot run the browser.
+
+## Pre-commit
+
+Copy `.pre-commit-config.node.yaml` from the blueprint. Add Next-specific `next lint --max-warnings 0` as an extra hook if desired.
+
+## Git
+
+- Conventional commits.
+- Use git worktrees for parallel feature branches: `git worktree add ../app-feat-x feat/x`.
+
+## Tooling
+
+- **serena** MCP for fast navigation of large App Router trees.
+- **context7** for Next.js 15 docs (API surface changes frequently).
+- **playwright** MCP for browser tests.
+- Subagents: `coder`, `tester`, `reviewer`.

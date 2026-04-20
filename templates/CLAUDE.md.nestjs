@@ -1,0 +1,90 @@
+# Claude Code Configuration — NestJS Microservice
+
+## Project identity
+
+- **Framework**: NestJS 10+
+- **Language**: TypeScript 5.x, Node 20+
+- **Package manager**: npm / yarn (per-service; check `packageManager`)
+- **ORM**: Sequelize (default) or TypeORM — check `app.module.ts`
+- **DB**: PostgreSQL (default)
+- **Lint**: ESLint + Prettier
+- **Test**: Jest
+
+## Behavioral rules (always enforced)
+
+- Do what was asked — nothing more, nothing less.
+- NEVER create files unless necessary. Prefer editing existing ones.
+- NEVER create docs/`*.md`/README files unless explicitly requested.
+- ALWAYS read a file before editing it.
+- NEVER commit secrets or `.env*` files.
+
+## NestJS layering
+
+```
+Controller  → handles HTTP, DTO validation
+Service     → business logic, orchestrates repos
+Repository  → Sequelize / TypeORM data access
+Entity      → model / table mapping
+Module      → dependency injection graph
+```
+
+- Controllers never touch the DB directly.
+- Services never touch `req` / `res` directly.
+- DTOs use `class-validator` + `class-transformer`. Register `ValidationPipe` globally with `whitelist: true, forbidNonWhitelisted: true`.
+
+## Code conventions
+
+- **File naming**: `kebab-case` with role suffix — `users.controller.ts`, `users.service.ts`, `user.entity.ts`, `create-user.dto.ts`.
+- **Class naming**: `PascalCase` matching file role — `UsersController`, `UsersService`.
+- **Modules**: one feature per module. Shared primitives in `CoreModule` / `SharedModule`.
+- **Logger token**: `{ provide: LOGGER, useValue: Logger }` — class reference, not instance.
+- **Config**: via `@nestjs/config` with typed schema. No `process.env` access in business code.
+
+## TDD workflow
+
+1. Write a failing unit test in `*.service.spec.ts` or controller e2e test.
+2. Implement minimal code.
+3. Refactor.
+
+```bash
+npm run start:dev              # watch mode
+npm run lint
+npm run test                   # unit
+npm run test:e2e               # integration via supertest
+npm run test:cov               # coverage; aim ≥ 70%
+npm run build
+```
+
+## Always use Docker for type-check / build
+
+Do NOT run `npx tsc` or `npm run build` directly in the host shell when the project is part of a docker-compose stack. Run inside the container:
+
+```bash
+docker compose exec <service-name> npx tsc --noEmit
+docker compose exec <service-name> npm test
+```
+
+## Migrations
+
+- Sequelize migrations live in a dedicated migrations repo (see the agency's shared conventions).
+- NEVER commit directly to `staging` — branch, PR, review, merge.
+- One migration per schema change. Name: `YYYYMMDDHHMMSS-short-description.js`.
+
+## Security
+
+- `ValidationPipe` globally — strip unknown props.
+- Guards: `AuthGuard` + `RolesGuard` on every non-public route.
+- Parameterize all raw queries. Never interpolate user input into SQL.
+- Rate-limit public endpoints with `@nestjs/throttler`.
+
+## Git
+
+- Conventional commits: `feat(users): add oauth flow`.
+- Branch from `staging`. One feature per PR. Rebase onto staging before merge.
+- Worktrees for parallel microservices: `git worktree add ../svc-feat-x feat/x`.
+
+## Tooling
+
+- **serena** MCP for navigating entity ↔ service ↔ controller chains.
+- **context7** for NestJS docs.
+- Subagents: `coder` (implementation), `tester` (Jest + supertest), `reviewer` (pre-PR).

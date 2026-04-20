@@ -116,6 +116,24 @@ Files driving this:
 - `scripts/workflow/feature.sh` — worktree + branch creation
 - `scripts/workflow/finish.sh` — runs the release gate
 
+## Dashboard (`dashboard/`)
+
+Lightweight web UI to see every active agent across every project you have open. No deps, no build step — plain Node + vanilla JS.
+
+```bash
+node dashboard/server.mjs   # http://127.0.0.1:7842
+```
+
+Zones: **Meeting Room** (waiting for you — click to reply), **Office** (working), **Cafeteria** (idle), **Tickets** (per-branch activity).
+
+Data flow:
+```
+Claude Code hooks → ~/.claude-agency/events.jsonl → server → dashboard polls /api/state.json (2s)
+                                                      └── /api/unblock → ~/.claude-agency/inbox/<session>.txt
+```
+
+Hooks are registered in `.claude/settings.json` (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStop`) and all funnel through `.claude/hooks/agency-emit.sh`. See `dashboard/README.md` for limitations + v2 wishlist.
+
 ## Customizing per Team
 
 Projects extend this baseline by adding a `.claude/settings.local.json` and a project-specific `CLAUDE.md`. Do not edit this blueprint for project-specific tweaks — PR changes back here only when they should apply agency-wide.

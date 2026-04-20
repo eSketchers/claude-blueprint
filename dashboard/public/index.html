@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agency Dashboard</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>🏢 Agency Dashboard</h1>
+    <div class="stats">
+      <span class="stat stat-working"><b id="c-working">0</b> working</span>
+      <span class="stat stat-waiting"><b id="c-waiting">0</b> waiting</span>
+      <span class="stat stat-idle"><b id="c-idle">0</b> idle</span>
+    </div>
+    <div class="updated">updated <span id="updated">—</span></div>
+  </header>
+
+  <main>
+    <section class="zone zone-meeting" id="zone-waiting">
+      <h2>🛑 Meeting Room <small>(waiting for you)</small></h2>
+      <div class="cards" id="cards-waiting"></div>
+      <p class="empty">Nobody's blocked. Good.</p>
+    </section>
+
+    <section class="zone zone-office" id="zone-working">
+      <h2>💻 Office <small>(in flow)</small></h2>
+      <div class="cards" id="cards-working"></div>
+      <p class="empty">The office is empty.</p>
+    </section>
+
+    <section class="zone zone-cafeteria" id="zone-idle">
+      <h2>☕ Cafeteria <small>(idle)</small></h2>
+      <div class="cards" id="cards-idle"></div>
+      <p class="empty">Nobody's loafing.</p>
+    </section>
+
+    <section class="zone zone-tickets">
+      <h2>🎟️ Tickets</h2>
+      <table id="ticket-table">
+        <thead>
+          <tr>
+            <th>Ticket / branch</th>
+            <th>Repo</th>
+            <th>Agents</th>
+            <th>Last activity</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <div id="modal-root"></div>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

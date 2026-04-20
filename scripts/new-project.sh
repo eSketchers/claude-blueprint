@@ -71,12 +71,15 @@ if [[ -d "$BLUEPRINT_DIR/.claude/commands" ]]; then
   done
 fi
 
-# --- Hooks (ticket detection, pre-commit pass-through) ---
+# --- Hooks (ticket detection + dashboard telemetry) ---
 if [[ -d "$BLUEPRINT_DIR/.claude/hooks" ]]; then
   mkdir -p "$TARGET/.claude/hooks"
   cp -R "$BLUEPRINT_DIR"/.claude/hooks/. "$TARGET/.claude/hooks/"
   chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
 fi
+
+# --- Dashboard (symlinked — one dashboard for all projects) ---
+ln -sfn "$BLUEPRINT_DIR/dashboard" "$TARGET/.claude/dashboard"
 
 # --- Workflow scripts (feature-ticket pipeline) ---
 if [[ -d "$BLUEPRINT_DIR/scripts/workflow" ]]; then

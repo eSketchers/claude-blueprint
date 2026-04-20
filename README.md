@@ -118,6 +118,25 @@ Files driving this:
 - `scripts/workflow/feature.sh` — worktree + branch creation
 - `scripts/workflow/finish.sh` — runs the release gate
 
+## Orchestrator (`orchestrator/`) — unattended intake + budget + Slack
+
+Run it as a daemon to pick up tickets without a human kicking off each one:
+
+```bash
+cp config/orchestrator.example.json config/orchestrator.json    # edit: sources, caps, Slack
+./scripts/start-orchestrator.sh                                   # background daemon
+```
+
+What it does every tick (default 60s):
+
+1. **Polls sources** (GitHub via `gh` CLI in v1; ClickUp/Linear drop-in)
+2. **Spawns a headless Claude Code session per new ticket** — runs `/ticket <url> --auto`
+3. **Tails** `~/.claude-agency/events.jsonl` for blocker / completion events from every session
+4. **Enforces budget** — per-ticket cap, daily cap, kill-switch via `touch ~/.claude-agency/KILLSWITCH`
+5. **Notifies Slack** on blocker / budget cap / ticket complete / error
+
+Full docs: `orchestrator/README.md`. **Start with `spawn.dry_run: true`** — it prints the command without executing so you can verify the template before going live.
+
 ## Dashboard (`dashboard/`)
 
 Lightweight web UI to see every active agent across every project you have open. No deps, no build step — plain Node + vanilla JS.

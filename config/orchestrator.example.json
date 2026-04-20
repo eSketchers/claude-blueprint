@@ -1,0 +1,47 @@
+{
+  "_comment": "Copy to config/orchestrator.json and edit. The orchestrator polls every tick_interval_ms.",
+
+  "tick_interval_ms": 60000,
+
+  "sources": [
+    {
+      "type": "github",
+      "name": "example-repo",
+      "enabled": false,
+      "repo": "your-org/your-repo",
+      "label": "ai-ready",
+      "state": "open",
+      "assignee": null,
+      "limit": 30,
+      "repo_path": "/absolute/path/to/your/local/clone"
+    }
+  ],
+
+  "budget": {
+    "_comment": "cost_per_event_usd is a rough proxy — we charge each hook event, not real tokens. Tune based on observed spend.",
+    "daily_usd_cap": 25,
+    "per_ticket_usd_cap": 2,
+    "cost_per_event_usd": 0.001,
+    "killswitch_file": "~/.claude-agency/KILLSWITCH"
+  },
+
+  "spawn": {
+    "_comment_1": "Template vars: {{ticket_url}}, {{ticket_id}}, {{repo_path}}, {{title}}",
+    "_comment_2": "Default targets `claude -p` headless mode. If your Claude Code CLI uses a different flag, customize here.",
+    "_comment_3": "Set dry_run:true while testing — logs what would run without actually spawning.",
+    "dry_run": true,
+    "command": "claude",
+    "args": ["-p", "/ticket {{ticket_url}} --auto"],
+    "cwd": "{{repo_path}}",
+    "env": {}
+  },
+
+  "notifier": {
+    "slack": {
+      "_comment": "Create an incoming webhook in Slack, export the URL to the env var below, then orchestrator will post there.",
+      "webhook_url_env": "AGENCY_SLACK_WEBHOOK",
+      "channel": "#agents",
+      "notify_on": ["blocker", "budget_cap", "ticket_complete", "error"]
+    }
+  }
+}

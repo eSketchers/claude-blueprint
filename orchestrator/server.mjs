@@ -18,6 +18,7 @@ import { Budget }          from './budget.mjs';
 import { Notifier }        from './notifier.mjs';
 import { spawnTicketAgent } from './spawn.mjs';
 import { fetchGithub }     from './sources/github.mjs';
+import { detectStuck }     from './stuck-detector.mjs';
 
 const CONFIG_PATH = process.env.AGENCY_ORCH_CONFIG || resolve('config/orchestrator.json');
 const HOME        = process.env.CLAUDE_AGENCY_HOME || join(homedir(), '.claude-agency');
@@ -38,6 +39,13 @@ if (config.budget?.killswitch_file?.startsWith('~')) {
 const registry = new Registry(HOME);
 const budget   = new Budget(config.budget || {}, registry);
 const notifier = new Notifier(config.notifier || {});
+const stuckCfg = config.stuck || {};
+
+// In-memory sliding window of recent events per ticket + last stuck notification time.
+// Lost on restart — idle-rule still works off persisted last_event_at.
+const EVENT_WINDOW_SIZE = 60;
+const ticketEvents = new Map();      // ticket_id -> Event[]
+const lastStuckNotifyAt = new Map(); // ticket_id -> ts
 
 console.log(`[orchestrator] home=${HOME}`);
 console.log(`[orchestrator] config=${CONFIG_PATH}`);
@@ -127,9 +135,46 @@ function sessionToTicketId(sessionId) {
   return null;
 }
 
+function appendToWindow(ticketId, ev) {
+  let arr = ticketEvents.get(ticketId);
+  if (!arr) { arr = []; ticketEvents.set(ticketId, arr); }
+  arr.push(ev);
+  if (arr.length > EVENT_WINDOW_SIZE) arr.splice(0, arr.length - EVENT_WINDOW_SIZE);
+}
+
 function onEvent(ev) {
   const ticketId = sessionToTicketId(ev.session_id) || (ev.ticket ? ev.ticket : null);
   if (!ticketId) return;
+
+  appendToWindow(ticketId, ev);
+
+  // If this ticket was marked stuck and it's emitting substantive events again, clear it.
+  const t = registry.get(ticketId);
+  if (t?.status === 'stuck' && ev.kind !== 'stop') {
+    registry.update(ticketId, {
+      status: 'in_progress',
+      stuck_reason: null,
+      stuck_since: null,
+      resumed_at: ev.ts,
+      last_event_at: ev.ts,
+    });
+    notifier.notify('info', {
+      title: `Resumed ${ticketId}`,
+      ticket_id: ticketId,
+      body: `Was stuck (${t.stuck_reason}); emitted ${ev.kind}.`,
+    });
+  } else {
+    // Always persist last_event_at so idle detection survives restart.
+    registry.update(ticketId, { last_event_at: ev.ts });
+  }
+
+  // Track whether this ticket has ever touched a file — feeds the
+  // "stop without changes" heuristic.
+  if (ev.kind === 'pre_tool' && (ev.tool === 'Edit' || ev.tool === 'Write')) {
+    if (!registry.get(ticketId)?.had_file_change) {
+      registry.update(ticketId, { had_file_change: true });
+    }
+  }
 
   // Charge the ticket for this event
   budget.chargeEvent(ticketId);
@@ -146,7 +191,7 @@ function onEvent(ev) {
     }
   }
 
-  // Blocker notification
+  // Blocker notification (explicit, via /wait-for-reply)
   if (ev.kind === 'notification') {
     notifier.notify('blocker', {
       title: `Blocker on ${ticketId}`,
@@ -156,15 +201,58 @@ function onEvent(ev) {
     });
     registry.update(ticketId, { status: 'waiting', last_question: ev.notif || '' });
   }
-  // Completion (best-effort: a stop event with no recent notification)
+
+  // Completion / asked-and-returned (decided on next stuck-check tick):
+  // mark the session as pending_stop; the stuck detector resolves it.
   if (ev.kind === 'stop') {
     const prev = registry.get(ticketId);
-    if (prev && prev.status !== 'halted' && prev.status !== 'done') {
-      registry.update(ticketId, { status: 'done' });
+    if (!prev || prev.status === 'halted' || prev.status === 'done' || prev.status === 'waiting') return;
+
+    if (prev.had_file_change) {
+      registry.update(ticketId, { status: 'done', pending_stop: false });
       notifier.notify('ticket_complete', {
         title: `Finished ${prev.title || ticketId}`,
         ticket_id: ticketId,
         link: prev.url,
+      });
+    } else {
+      // Let stuckTick pick it up with the 'stopped_no_changes' rule.
+      registry.update(ticketId, { pending_stop: true });
+    }
+  }
+}
+
+// ---------- Stuck-detection tick ----------
+
+function stuckTick() {
+  const now = Date.now();
+  const reNotifyMs = stuckCfg.re_notify_after_ms ?? 600_000;
+
+  for (const ticket of registry.list()) {
+    const window = ticketEvents.get(ticket.id) || [];
+    const stuck = detectStuck(ticket, window, stuckCfg, now);
+    if (!stuck) continue;
+
+    const alreadyStuck = ticket.status === 'stuck' && ticket.stuck_reason === stuck.reason;
+    const lastNotify = lastStuckNotifyAt.get(ticket.id) || 0;
+    const cooldownOk = (now - lastNotify) > reNotifyMs;
+
+    if (!alreadyStuck) {
+      registry.update(ticket.id, {
+        status: 'stuck',
+        stuck_reason: stuck.reason,
+        stuck_since: now,
+        stuck_detail: stuck.detail,
+      });
+    }
+
+    if (!alreadyStuck || cooldownOk) {
+      lastStuckNotifyAt.set(ticket.id, now);
+      notifier.notify('blocker', {
+        title: `Stuck (${stuck.reason}) on ${ticket.title || ticket.id}`,
+        ticket_id: ticket.id,
+        body: stuck.detail,
+        link: ticket.url || 'http://127.0.0.1:7842',
       });
     }
   }
@@ -199,6 +287,7 @@ async function tick() {
   try {
     await intakeTick();
     tailEvents();
+    stuckTick();
     const warn = budget.checkThresholds();
     if (warn?.warn) await notifier.notify('budget_cap', { title: warn.reason });
   } catch (e) {

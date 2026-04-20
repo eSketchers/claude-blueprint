@@ -125,6 +125,21 @@ The default is `claude -p "/ticket {{ticket_url}} --auto"`. This assumes your Cl
 
 Use `dry_run: true` to verify the expanded command before letting it fly.
 
+## Stuck-agent detection
+
+The orchestrator watches each active ticket and flips it to `status: stuck` when it matches any of these heuristics. A Slack notification is sent on each transition; re-notification is throttled by `stuck.re_notify_after_ms` to avoid spam.
+
+| Rule | When it fires | Signal |
+|---|---|---|
+| `idle` | No events for `idle_timeout_ms` (default 10 min) | Session alive, agent stalled / deadlocked |
+| `tool_loop` | Same tool + same file `tool_loop_threshold` times in a row (default 5) | Agent editing the same file repeatedly without progress |
+| `thrashing` | `thrashing_window` events (default 50) with no `Edit`/`Write` | Agent reading forever, not producing changes |
+| `stopped_no_changes` | `Stop` event fires but ticket never touched a file | Classic ask-a-question-and-return (agent didn't use `/wait-for-reply`) |
+
+When a stuck ticket emits a new substantive event (not `stop`), it transitions back to `in_progress` and Slack gets a `resumed` info ping. State is persisted in `registry.json` (`status`, `stuck_reason`, `stuck_since`, `stuck_detail`) so the dashboard can surface it.
+
+Tune all thresholds in `config/orchestrator.json` under the `stuck` block. Set any to an absurdly high value to effectively disable a rule.
+
 ## Known limitations (v1)
 
 - **Budget is approximate** — not real tokens.

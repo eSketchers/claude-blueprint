@@ -17,6 +17,19 @@
     }
   ],
 
+  "stuck": {
+    "_comment_1": "Heuristics for detecting agents running but not progressing.",
+    "_comment_2": "idle_timeout_ms: session alive, no events in this long -> stuck:idle",
+    "_comment_3": "tool_loop_threshold: same tool+file N times in a row -> stuck:tool_loop",
+    "_comment_4": "thrashing_window: last N events, no Edit/Write -> stuck:thrashing",
+    "_comment_5": "stopped_no_changes: Stop fires but ticket never touched a file -> asked-and-returned",
+    "_comment_6": "re_notify_after_ms: throttle repeat Slack pings for the same stuck reason",
+    "idle_timeout_ms": 600000,
+    "tool_loop_threshold": 5,
+    "thrashing_window": 50,
+    "re_notify_after_ms": 600000
+  },
+
   "budget": {
     "_comment": "cost_per_event_usd is a rough proxy — we charge each hook event, not real tokens. Tune based on observed spend.",
     "daily_usd_cap": 25,

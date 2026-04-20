@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
-# new-project.sh — copy the blueprint into a new project directory.
+# new-project.sh — scaffold a new project from the blueprint.
 # Usage:  ./scripts/new-project.sh <project-name> <python|node|nextjs|nestjs>
+#
+# What it does:
+#   1. Copies our custom role agents (frontend-dev / backend-dev / devops / architect / qa-lead / data-engineer)
+#   2. Symlinks superpowers skills, commands, and code-reviewer agent into the project
+#   3. Symlinks the ticket workflow command
+#   4. Copies the framework CLAUDE.md template + pre-commit config
+#   5. Inits git, installs pre-commit hooks
 
 set -euo pipefail
 
-log() { printf '\033[1;34m[new-project]\033[0m %s\n' "$*"; }
-die() { printf '\033[1;31m[error]\033[0m %s\n' "$*" >&2; exit 1; }
+log()  { printf '\033[1;34m[new-project]\033[0m %s\n' "$*"; }
+warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
+die()  { printf '\033[1;31m[error]\033[0m %s\n' "$*" >&2; exit 1; }
 
 BLUEPRINT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -16,17 +24,66 @@ FRAMEWORK="$2"
 
 case "$FRAMEWORK" in
   python|node|nextjs|nestjs) ;;
-  *) die "Unknown framework: $FRAMEWORK (expected: python, node, nextjs, nestjs)" ;;
+  *) die "Unknown framework: $FRAMEWORK" ;;
 esac
+
+# Ensure submodules are present before symlinking
+if [[ ! -d "$BLUEPRINT_DIR/vendor/superpowers/skills" ]]; then
+  log "Initializing blueprint submodules..."
+  (cd "$BLUEPRINT_DIR" && git submodule update --init --recursive)
+fi
 
 TARGET="$(pwd)/$NAME"
 [[ -e "$TARGET" ]] && die "Target already exists: $TARGET"
 
-log "Creating $TARGET ..."
-mkdir -p "$TARGET"
+log "Scaffolding $TARGET ..."
+mkdir -p "$TARGET/.claude/agents" "$TARGET/.claude/commands" "$TARGET/.claude/skills"
 
-# --- .claude/ baseline ---
-cp -R "$BLUEPRINT_DIR/.claude" "$TARGET/.claude"
+# --- Our custom role agents (copied, not symlinked — these are the project's baseline) ---
+cp "$BLUEPRINT_DIR"/.claude/agents/*.md "$TARGET/.claude/agents/"
+cp "$BLUEPRINT_DIR"/.claude/settings.json "$TARGET/.claude/settings.json"
+
+# --- Superpowers: symlink skills + commands + code-reviewer agent ---
+SP="$BLUEPRINT_DIR/vendor/superpowers"
+
+for skill in "$SP"/skills/*/; do
+  [[ -d "$skill" ]] || continue
+  sname="$(basename "$skill")"
+  ln -sfn "$skill" "$TARGET/.claude/skills/$sname"
+done
+
+for cmd in "$SP"/commands/*.md; do
+  [[ -f "$cmd" ]] || continue
+  cname="$(basename "$cmd")"
+  ln -sfn "$cmd" "$TARGET/.claude/commands/$cname"
+done
+
+ln -sfn "$SP/agents/code-reviewer.md" "$TARGET/.claude/agents/code-reviewer.md"
+
+# --- Our workflow commands (ticket.md, etc.) ---
+if [[ -d "$BLUEPRINT_DIR/.claude/commands" ]]; then
+  for cmd in "$BLUEPRINT_DIR"/.claude/commands/*.md; do
+    [[ -f "$cmd" ]] || continue
+    cname="$(basename "$cmd")"
+    # Don't clobber superpowers commands with same name
+    [[ -e "$TARGET/.claude/commands/$cname" ]] && continue
+    cp "$cmd" "$TARGET/.claude/commands/$cname"
+  done
+fi
+
+# --- Hooks (ticket detection, pre-commit pass-through) ---
+if [[ -d "$BLUEPRINT_DIR/.claude/hooks" ]]; then
+  mkdir -p "$TARGET/.claude/hooks"
+  cp -R "$BLUEPRINT_DIR"/.claude/hooks/. "$TARGET/.claude/hooks/"
+  chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
+fi
+
+# --- Workflow scripts (feature-ticket pipeline) ---
+if [[ -d "$BLUEPRINT_DIR/scripts/workflow" ]]; then
+  mkdir -p "$TARGET/scripts/workflow"
+  cp -R "$BLUEPRINT_DIR"/scripts/workflow/. "$TARGET/scripts/workflow/"
+  chmod +x "$TARGET"/scripts/workflow/*.sh 2>/dev/null || true
+fi
 
 # --- CLAUDE.md from framework template ---
 cp "$BLUEPRINT_DIR/templates/CLAUDE.md.$FRAMEWORK" "$TARGET/CLAUDE.md"
@@ -73,7 +130,8 @@ htmlcov/
 *.swp
 .DS_Store
 
-# Claude
+# Claude — keep symlinks in git so collaborators get the same layout.
+# Only ignore per-user local overrides.
 .claude/settings.local.json
 GITIGNORE
 
@@ -89,7 +147,11 @@ GITIGNORE
   fi
 )
 
-log "Done."
+log "Done. Symlinked into $TARGET/.claude/:"
+log "  - $(ls "$TARGET/.claude/skills/" | wc -l) skills from superpowers"
+log "  - $(ls "$TARGET/.claude/commands/" | wc -l) commands"
+log "  - $(ls "$TARGET/.claude/agents/" | wc -l) agents"
+log ""
 log "Next:"
 log "  cd $NAME"
 log "  claude    # launch Claude Code in this project"

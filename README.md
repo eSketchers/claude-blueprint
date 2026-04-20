@@ -33,9 +33,15 @@ Reusable Claude Code baseline for all agency projects. Clone into a new project 
 ```
 .claude/
   settings.json         Baseline permissions + hooks + MCP config
-  agents/               architect, coder, frontend-dev, backend-dev, tester, qa-lead, reviewer, devops, data-engineer
-  commands/             Shared slash commands (to add)
-  skills/               Drop-in project skills
+  agents/               architect, frontend-dev, backend-dev, qa-lead, devops, data-engineer
+                        + code-reviewer (symlinked from superpowers)
+  commands/             ticket.md (agency feature-ticket workflow)
+                        + brainstorm/write-plan/execute-plan (symlinked from superpowers)
+  hooks/                detect-ticket.sh (UserPromptSubmit)
+  skills/               14 superpowers skills (symlinked): brainstorming, writing-plans,
+                        executing-plans, test-driven-development, using-git-worktrees,
+                        dispatching-parallel-agents, requesting-code-review,
+                        finishing-a-development-branch, systematic-debugging, etc.
 
 templates/
   CLAUDE.md.python      Python + Flake8 template
@@ -68,6 +74,47 @@ These are **read-only reference copies** pinned to a known-good commit. Team mem
 - **Clone the blueprint with submodules**: `git clone --recurse-submodules <blueprint-url>` (or `git submodule update --init` after a plain clone)
 
 Installation still happens via the official marketplaces / registries through `bootstrap.sh` — the vendored copies are for inspection, not installation targets.
+
+## Agent roster
+
+We keep only **role-specialist** agents that add real value over upstream:
+
+| Agent | Purpose | Why custom (vs upstream) |
+|---|---|---|
+| `architect` | System design, ADRs, tradeoffs | Upstream stubs are too thin |
+| `frontend-dev` | React / Next / RN, a11y, Tailwind | No upstream equivalent |
+| `backend-dev` | Node/Nest/FastAPI, DB, migrations, security | Upstream `*-specialist.md` are 6 lines |
+| `qa-lead` | Test strategy, release gates, bug triage | No upstream equivalent |
+| `devops` | Docker / CI / IaC / secrets | Upstream `devops/ci-cd/` is stubs |
+| `data-engineer` | Pipelines, warehouse, dbt, streaming | No upstream equivalent |
+| `code-reviewer` | **Symlinked from superpowers** | Theirs is already excellent |
+
+Workflow verbs (plan, review, execute, TDD, worktree, finish branch) come from **superpowers skills** — we don't reinvent them.
+
+## Feature-ticket workflow
+
+Paste a ticket URL (ClickUp / Linear / GitHub / Jira) in the prompt — the `UserPromptSubmit` hook detects it and nudges Claude to run `/ticket <url>`.
+
+```
+/ticket https://app.clickup.com/t/abc123
+  → [0] fetch + classify (feature/bug/chore/spike)
+  → [1] architect writes plan
+  → [2] code-reviewer adversarially reviews the plan
+  → [3] architect produces v2 plan addressing blockers
+  → [4] approval gate  (skip with --auto)
+  → [5] scripts/workflow/feature.sh creates worktree + branch
+  → [6] dispatch parallel: backend-dev / frontend-dev / data-engineer / devops (as needed)
+       each writes failing test first (TDD skill)
+  → [7] scripts/workflow/finish.sh — lint + typecheck + tests
+  → [8] auto-fix loop (max 3 iterations)
+  → [9] commit + push + gh pr create, return PR URL
+```
+
+Files driving this:
+- `.claude/commands/ticket.md` — the slash command
+- `.claude/hooks/detect-ticket.sh` — auto-detects ticket URLs in user messages
+- `scripts/workflow/feature.sh` — worktree + branch creation
+- `scripts/workflow/finish.sh` — runs the release gate
 
 ## Customizing per Team
 

@@ -33,7 +33,7 @@ Reusable Claude Code baseline for all agency projects. Clone into a new project 
 ```
 .claude/
   settings.json         Baseline permissions + hooks + MCP config
-  agents/               coder, frontend-dev, backend-dev, tester, reviewer, devops
+  agents/               architect, coder, frontend-dev, backend-dev, tester, qa-lead, reviewer, devops, data-engineer
   commands/             Shared slash commands (to add)
   skills/               Drop-in project skills
 

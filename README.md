@@ -2,6 +2,8 @@
 
 Reusable Claude Code baseline for all agency projects. Clone into a new project root, or copy `.claude/` + the appropriate `CLAUDE.md` template.
 
+**👉 New here? Start with [SETUP.md](./SETUP.md) — full step-by-step onboarding, from host install to shipping your first PR via the `/ticket` workflow.**
+
 ## Stack
 
 | Layer | Tool | Purpose |

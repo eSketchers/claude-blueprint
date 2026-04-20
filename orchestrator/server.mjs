@@ -18,6 +18,7 @@ import { Budget }          from './budget.mjs';
 import { Notifier }        from './notifier.mjs';
 import { spawnTicketAgent } from './spawn.mjs';
 import { fetchGithub }     from './sources/github.mjs';
+import { fetchFilesystem, archiveFilesystemTicket } from './sources/filesystem.mjs';
 import { detectStuck }     from './stuck-detector.mjs';
 
 const CONFIG_PATH = process.env.AGENCY_ORCH_CONFIG || resolve('config/orchestrator.json');
@@ -68,7 +69,8 @@ async function intakeTick() {
 
     let tickets = [];
     try {
-      if (src.type === 'github') tickets = await fetchGithub(src);
+      if (src.type === 'github')     tickets = await fetchGithub(src);
+      else if (src.type === 'filesystem') tickets = await fetchFilesystem(src);
       else {
         console.warn(`[intake] unknown source type: ${src.type}`);
         continue;
@@ -116,6 +118,11 @@ async function intakeTick() {
         link: t.url,
         body: `Tracking in dashboard. Log: ${result.logFile || '(dry-run)'}`,
       });
+
+      // Archive filesystem tickets so we don't re-claim them next tick
+      if (t.source === 'filesystem') {
+        try { await archiveFilesystemTicket(t); } catch {/* non-fatal */}
+      }
     }
   }
 }

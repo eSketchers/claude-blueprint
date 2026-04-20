@@ -1,0 +1,128 @@
+# Claude Code Configuration — Django (backend) + React (frontend)
+
+## Project identity
+
+- **Backend**: Django 5.x + Django REST Framework, Python 3.11+
+- **Frontend**: React 18 + Vite + TypeScript + Tailwind
+- **DB**: SQLite (dev) / PostgreSQL (prod)
+- **Package managers**: `uv` (Python) + `pnpm` (JS)
+- **Lint**: Flake8 + Black + isort (Python); ESLint + Prettier (JS)
+- **Test**: pytest + pytest-django (Python); Vitest + React Testing Library + Playwright (JS)
+
+## Monorepo layout
+
+```
+backend/          Django project
+  manage.py
+  config/         settings, urls, wsgi
+  polls/          the app
+    models.py  views.py  serializers.py  urls.py  tests/
+  pyproject.toml  requirements.txt
+frontend/         React + Vite
+  src/
+    api/          fetch/axios wrappers, generated types
+    components/
+    pages/
+    App.tsx  main.tsx
+  package.json  vite.config.ts
+docs/             tech-spec, ADRs, runbook
+```
+
+## Behavioral rules (always enforced)
+
+- Do what was asked — nothing more, nothing less.
+- NEVER create files unless necessary; prefer editing existing ones.
+- NEVER create docs/`*.md`/README files unless explicitly requested.
+- ALWAYS read a file before editing it.
+- NEVER commit secrets, credentials, or `.env*` files.
+
+## TDD workflow (mandatory)
+
+1. Failing test first (pytest for backend, Vitest for frontend, Playwright for E2E).
+2. Minimum implementation to pass.
+3. Refactor with tests green.
+
+## Backend conventions (Django + DRF)
+
+- **Apps**: one app per bounded context (`polls`, `users`, `billing`). Don't dump everything in a single app.
+- **Models**: `CharField(max_length=...)` always explicit. Use `TextField` for unbounded. Add `__str__` for every model.
+- **Migrations**: one per schema change. Never edit `0001_initial` after it's deployed. No data + schema in the same migration.
+- **Serializers**: thin — validation + (de)serialization only. No business logic.
+- **Views**: generic views / viewsets when possible. `permission_classes` explicit on every view.
+- **URLs**: app-level `urls.py` included from project `urls.py`. Name every URL pattern.
+- **Settings**: `django-environ` for env vars; never `os.getenv` scattered through settings.py.
+- **Admin**: register every model that humans will edit; custom list/filter/search fields — don't ship the default admin.
+- **Query perf**: `select_related` / `prefetch_related` for foreign keys you render. Turn on `django-silk` in dev to catch N+1.
+
+## Frontend conventions (React + Vite + TS)
+
+- **Strict TS**: `strict: true`, `noImplicitAny: true`, `noUncheckedIndexedAccess: true`.
+- **API layer**: one `src/api/` module wrapping fetch. Types either hand-written or generated from DRF's OpenAPI schema via `openapi-typescript`.
+- **State**: TanStack Query for server state. Zustand for cross-route client state. React state for component-local.
+- **Forms**: `react-hook-form` + `zod` resolver.
+- **Routing**: React Router v6 (`BrowserRouter` in dev, `<Outlet />` for layouts).
+- **Styling**: Tailwind utilities. Extract a component when the class string exceeds ~8 utilities and repeats.
+- **Components**: named exports. Props are a typed interface. No `React.FC`. No default exports except page-level lazy loads.
+- **Tests**: unit (Vitest + RTL) for logic/interactions; E2E (Playwright) for user flows.
+
+## Local dev
+
+```bash
+# Backend
+cd backend && uv sync
+uv run python manage.py migrate
+uv run python manage.py runserver      # :8000
+
+# Frontend
+cd frontend && pnpm install
+pnpm dev                                # :5173 (proxies /api -> :8000)
+
+# All tests
+cd backend  && uv run pytest
+cd frontend && pnpm test && pnpm test:e2e
+```
+
+Vite proxy config (`frontend/vite.config.ts`): proxy `/api` to `http://localhost:8000` to avoid CORS in dev.
+
+## CORS & auth
+
+- Dev: Vite proxy (no CORS needed); production: `django-cors-headers` with explicit origin allowlist.
+- Auth: session-cookie (same-site strict) OR JWT via `djangorestframework-simplejwt`. Pick one per project; document in tech-spec.
+- CSRF: enabled for session auth, `{% csrf_token %}` on forms; bypass only on JWT-auth viewsets with `@authentication_classes([JWTAuthentication])`.
+
+## Security
+
+- **Never** interpolate user input into raw SQL; use ORM or `params=` in `cursor.execute`.
+- `DEBUG = False` in prod (enforced via `django.core.management.commands.check --deploy`).
+- `SECURE_*` settings in prod: `SECURE_HSTS_SECONDS`, `SECURE_SSL_REDIRECT`, `SECURE_CONTENT_TYPE_NOSNIFF`, `CSRF_COOKIE_SECURE`, `SESSION_COOKIE_SECURE`.
+- File uploads: validate content-type AND extension AND size; store in dedicated bucket, not alongside source.
+- Rate-limit public endpoints (`django-ratelimit` or DRF throttling).
+- `pre-commit` with `gitleaks` + `bandit` for secrets / Python security smells.
+
+## Pre-commit
+
+Install once per clone: `pre-commit install`. Use both hook configs:
+
+```bash
+cp <blueprint>/pre-commit/.pre-commit-config.python.yaml backend/.pre-commit-config.yaml
+cp <blueprint>/pre-commit/.pre-commit-config.node.yaml   frontend/.pre-commit-config.yaml
+```
+
+Or combine into a single config at the repo root — see `.pre-commit-config.yaml` in the playground template.
+
+## Git
+
+- Conventional commits: `feat(polls): add Vote model`, `fix(frontend): correct proxy target`.
+- Branch per ticket. Worktrees for parallel tracks: `git worktree add ../polls-feat-x feat/x`.
+- Rebase onto main; no merge commits on feature branches.
+
+## Waiting for operator input (multi-agent flow)
+
+If running alongside other agents (which is the default in this playground), use `/wait-for-reply "<question>"` instead of asking and returning. The dashboard at http://127.0.0.1:7843 surfaces the block; your reply resumes the turn.
+
+## Tooling
+
+- **serena** MCP — nav across Django models ↔ views ↔ serializers and React component trees.
+- **context7** MCP — current Django 5 / DRF / React 18 / TanStack Query docs.
+- **playwright** MCP — browser E2E.
+- Subagents: `backend-dev` (Django), `frontend-dev` (React), `architect` (spec), `qa-lead` (test strategy), `reviewer` / `code-reviewer` (pre-PR).

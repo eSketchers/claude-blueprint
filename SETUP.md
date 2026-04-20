@@ -318,7 +318,22 @@ Zones:
 - **☕ Cafeteria** — agents idle (session open, no recent activity).
 - **🎟️ Tickets** — one row per branch / ticket across all your projects.
 
-See `dashboard/README.md` for the current limitation: the unblock message is dropped into `~/.claude-agency/inbox/<session>.txt` but agents don't auto-pick-it-up yet — you still paste the reply into Claude Code manually. This will change in v2.
+### Self-resume: how agents pick up your replies
+
+Two slash commands close the loop between the dashboard and the agent:
+
+- `/check-inbox` — non-blocking; reads + archives any pending reply. Use at the start of a turn.
+- `/wait-for-reply "<question>"` — blocking; notifies the dashboard (agent shows up in **Meeting Room** with the question), polls for up to 120s, resumes in the same turn when you reply.
+
+**Typical parallel-agent flow:**
+
+1. Agent A in project X hits a decision, runs `/wait-for-reply "Which database should this pipeline use?"`
+2. Dashboard flips A's card to Meeting Room with the question visible.
+3. Meanwhile, Agent B in project Y is still working in the Office zone — no delay.
+4. You click A's card in the dashboard, type your answer, send.
+5. A's `/wait-for-reply` sees the inbox file, picks up the reply, continues its turn.
+
+For a full breakdown see `dashboard/README.md`.
 
 ---
 

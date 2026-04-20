@@ -83,6 +83,10 @@ docker compose exec <service-name> npm test
 - Branch from `staging`. One feature per PR. Rebase onto staging before merge.
 - Worktrees for parallel microservices: `git worktree add ../svc-feat-x feat/x`.
 
+## Waiting for operator input (multi-agent flow)
+
+If you're running alongside other agents and need a decision, call `/wait-for-reply "<question>"` to block + appear in the dashboard **Meeting Room** until the operator replies. `/check-inbox` does a non-blocking pull at turn start.
+
 ## Tooling
 
 - **serena** MCP for navigating entity ↔ service ↔ controller chains.

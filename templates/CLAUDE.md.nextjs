@@ -72,6 +72,10 @@ Copy `.pre-commit-config.node.yaml` from the blueprint. Add Next-specific `next 
 - Conventional commits.
 - Use git worktrees for parallel feature branches: `git worktree add ../app-feat-x feat/x`.
 
+## Waiting for operator input (multi-agent flow)
+
+If you're running alongside other agents, block with `/wait-for-reply "<question>"` instead of returning control. Dashboard flips you to the **Meeting Room**; operator replies land in the same turn. `/check-inbox` does a non-blocking pull.
+
 ## Tooling
 
 - **serena** MCP for fast navigation of large App Router trees.

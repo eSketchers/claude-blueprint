@@ -121,3 +121,14 @@ button {
   border-radius: 6px; cursor: pointer; font-weight: 600; font: inherit;
 }
 button.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+
+#toast {
+  position: fixed; bottom: 1.25rem; left: 50%; transform: translate(-50%, 120%);
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+  border-left: 3px solid var(--working);
+  padding: 0.7rem 1rem; border-radius: var(--radius);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  max-width: min(520px, 92vw); z-index: 200;
+  transition: transform 0.3s ease;
+}
+#toast.show { transform: translate(-50%, 0); }

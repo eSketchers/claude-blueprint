@@ -69,6 +69,16 @@ Run `pnpm lint && pnpm typecheck && pnpm test` before reporting done.
 - Secrets via env vars loaded through a typed config module.
 - SQL via parameterized queries or query builder (Knex / Drizzle / Prisma).
 
+## Waiting for operator input (multi-agent flow)
+
+If you're one of several agents running in parallel and need a decision, **don't just ask and return** — block and poll the dashboard inbox:
+
+```
+/wait-for-reply "Which auth provider should we integrate first?"
+```
+
+Shows up in the dashboard **Meeting Room**; polls up to 120s; resumes the turn when the operator replies. Use `/check-inbox` for a non-blocking pull at turn start.
+
 ## Tooling notes
 
 - **serena** MCP for semantic search in large codebases.

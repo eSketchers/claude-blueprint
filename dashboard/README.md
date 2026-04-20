@@ -37,15 +37,31 @@ Open http://127.0.0.1:7842.
 - `AGENCY_PORT` — override the default 7842.
 - `CLAUDE_AGENCY_HOME` — override `~/.claude-agency` for the state dir.
 
-## Hooking unblock replies into your agents
+## Self-resume loop (agents pick up replies themselves)
 
-The dashboard only drops a file into `~/.claude-agency/inbox/<session>.txt`. For the agent to actually resume, one of the following needs to happen:
+The dashboard drops the unblock message into `~/.claude-agency/inbox/<session>.txt`. Two slash commands pick it up:
 
-1. **Manual** — you paste the reply into the Claude Code UI yourself (simplest, works today).
-2. **Custom tool / slash command** — a `/check-inbox` command reads the file and echoes it back to the agent (works; requires the agent to proactively check).
-3. **Notification responder** — a small watcher daemon that pushes the reply via the Claude Code messaging channel (requires deeper integration; future work).
+| Command | Behavior | When to use |
+|---|---|---|
+| `/check-inbox` | **Non-blocking** pull. Reads + archives any pending reply, or reports empty. | At the start of a turn, to see if there's a queued answer. |
+| `/wait-for-reply "<question>"` | **Blocking** poll (up to 120s). Fires a `notification` event so the dashboard flips the agent to **Meeting Room** with the question visible, then waits for the inbox file to materialize. | When the agent is genuinely blocked and other agents are running in parallel — lets the agent resume itself in the same turn. |
 
-For v1 we recommend (1). The dashboard is mainly a **status + audit trail** tool right now; the unblock file is a staging ground until (2)/(3) are built.
+### How `/wait-for-reply` works end-to-end
+
+1. Agent runs `/wait-for-reply "Which DB should the pipeline use?"`
+2. Script emits a `notification` event → dashboard shows the agent card in **Meeting Room** with the question on it
+3. Operator clicks the card, types a reply, sends → dashboard POSTs `/api/unblock` → server writes `~/.claude-agency/inbox/<session>.txt`
+4. Script's poll loop sees the file, prints the reply between `===== operator reply =====` delimiters, archives the file, exits 0
+5. Agent continues in the same turn, using the reply as input
+
+Timeout (default 120s, configurable): script exits 1 with a stderr notice. The command's `.claude/commands/wait-for-reply.md` spec tells the agent to hand control back rather than loop.
+
+### Helper scripts
+
+- `.claude/hooks/inbox-check.sh` — reads + archives inbox file
+- `.claude/hooks/inbox-wait.sh` — notification + blocking poll
+
+Both are deployed into every project by `scripts/new-project.sh`.
 
 ## Limitations (by design in v1)
 

@@ -134,7 +134,9 @@ Claude Code hooks → ~/.claude-agency/events.jsonl → server → dashboard pol
                                                       └── /api/unblock → ~/.claude-agency/inbox/<session>.txt
 ```
 
-Hooks are registered in `.claude/settings.json` (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStop`) and all funnel through `.claude/hooks/agency-emit.sh`. See `dashboard/README.md` for limitations + v2 wishlist.
+Hooks are registered in `.claude/settings.json` (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStop`) and all funnel through `.claude/hooks/agency-emit.sh`.
+
+**Self-resume**: agents that block on `/wait-for-reply "<question>"` show up in the dashboard **Meeting Room**; your reply in the dashboard lands in `~/.claude-agency/inbox/<session>.txt`, the poll picks it up, agent continues in the same turn. `/check-inbox` is the non-blocking variant for start-of-turn pulls. See `dashboard/README.md` for the full loop.
 
 ## Customizing per Team
 

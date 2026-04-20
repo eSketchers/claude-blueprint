@@ -81,6 +81,20 @@ Install once per clone: `pre-commit install`. Config lives at `.pre-commit-confi
 - Secrets via env vars + `pydantic-settings`. Never in source.
 - Sanitize file paths for any upload / download endpoint.
 
+## Waiting for operator input (multi-agent flow)
+
+If you need a decision from the operator and other agents are running in parallel elsewhere, **don't just ask and return** — block and poll the dashboard inbox so you can resume yourself when they reply:
+
+```
+/wait-for-reply "Which DB connection should this pipeline use?"
+```
+
+This emits a notification (you show up in the dashboard **Meeting Room**), then polls `~/.claude-agency/inbox/<session>.txt` for up to 120s. When the operator clicks your card and sends a reply, you pick it up automatically and continue in the same turn.
+
+For non-blocking checks at the start of a turn, `/check-inbox` pulls any pending reply without waiting.
+
+Don't use `/wait-for-reply` for trivial questions — only when you're genuinely blocked.
+
 ## When working on this project
 
 - Use **serena** MCP for code navigation before grepping large modules.

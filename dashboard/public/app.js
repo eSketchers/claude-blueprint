@@ -114,6 +114,7 @@ function openUnblockModal(agent) {
       });
       if (!r.ok) throw new Error(await r.text());
       root.innerHTML = '';
+      toast(`Reply sent to ${agent.name}. If they're on /wait-for-reply, they'll resume in a few seconds.`);
       tick();
     } catch (e) {
       alert('Failed to send: ' + e.message);
@@ -128,6 +129,19 @@ async function tick() {
     const state = await r.json();
     render(state);
   } catch {/* transient network errors are fine */}
+}
+
+function toast(msg, ms = 4500) {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._tid);
+  toast._tid = setTimeout(() => t.classList.remove('show'), ms);
 }
 
 function escapeHtml(s) {

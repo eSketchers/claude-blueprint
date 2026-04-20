@@ -1,0 +1,12 @@
+[submodule "vendor/superpowers"]
+	path = vendor/superpowers
+	url = https://github.com/obra/superpowers.git
+[submodule "vendor/graphify"]
+	path = vendor/graphify
+	url = https://github.com/safishamsi/graphify.git
+[submodule "vendor/claude-flow"]
+	path = vendor/claude-flow
+	url = https://github.com/ruvnet/claude-flow.git
+[submodule "vendor/awesome-claude-code"]
+	path = vendor/awesome-claude-code
+	url = https://github.com/hesreallyhim/awesome-claude-code.git

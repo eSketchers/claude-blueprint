@@ -33,8 +33,8 @@ Reusable Claude Code baseline for all agency projects. Clone into a new project 
 ```
 .claude/
   settings.json         Baseline permissions + hooks + MCP config
-  agents/               Custom subagent definitions
-  commands/             Shared slash commands
+  agents/               coder, frontend-dev, backend-dev, tester, reviewer, devops
+  commands/             Shared slash commands (to add)
   skills/               Drop-in project skills
 
 templates/
@@ -47,10 +47,27 @@ pre-commit/
   .pre-commit-config.python.yaml
   .pre-commit-config.node.yaml
 
+vendor/                 External tools vendored as git submodules
+  superpowers/          Plugin: TDD + worktree + review skills (obra)
+  graphify/             Skill: knowledge-graph indexing (safishamsi)
+  claude-flow/          MCP: multi-agent swarm orchestration (ruvnet)
+  awesome-claude-code/  Reference: curated index of skills/hooks/agents
+
 scripts/
   bootstrap.sh          Install plugins + MCPs globally
   new-project.sh        Clone blueprint into a new project dir
 ```
+
+## Working with `vendor/`
+
+These are **read-only reference copies** pinned to a known-good commit. Team members can:
+
+- **Inspect source** to understand how a skill/plugin works before trusting it
+- **Fork** any of them by adding their own remote
+- **Update** via `git submodule update --remote vendor/<name>`
+- **Clone the blueprint with submodules**: `git clone --recurse-submodules <blueprint-url>` (or `git submodule update --init` after a plain clone)
+
+Installation still happens via the official marketplaces / registries through `bootstrap.sh` — the vendored copies are for inspection, not installation targets.
 
 ## Customizing per Team
 

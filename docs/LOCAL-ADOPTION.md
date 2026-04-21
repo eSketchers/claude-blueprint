@@ -1,0 +1,106 @@
+# Local-Only Adoption
+
+Adopt the agency blueprint into an existing repo on your laptop — no shared infra, no team rollout. Everything the script generates is gitignored and yours alone.
+
+## Prerequisites
+
+- Claude Code CLI installed (`npm install -g @anthropic-ai/claude-code`)
+- `git`, `jq`, `pre-commit`, Node 20+, Python 3.11+
+- Global MCPs installed once: run the blueprint's `scripts/bootstrap.sh`
+
+## Pick a layout
+
+### Layout A — sibling (recommended)
+
+Blueprint lives outside your project. One clone, many adopted projects.
+
+```bash
+git clone --recurse-submodules <blueprint-url> ~/work/claude-agency-blueprint
+~/work/claude-agency-blueprint/scripts/bootstrap.sh
+echo 'export BLUEPRINT_DIR=~/work/claude-agency-blueprint' >> ~/.zshrc   # or .bashrc
+source ~/.zshrc
+```
+
+### Layout B — nested
+
+Blueprint lives inside the project. Self-contained, no env var.
+
+```bash
+cd ~/work/my-backend-project
+git clone --recurse-submodules <blueprint-url> .agency
+./.agency/scripts/bootstrap.sh
+```
+
+## Adopt
+
+```bash
+cd ~/work/my-backend-project
+git switch -c chore/agency-adopt-local            # isolate, even though files are gitignored
+
+# Layout A
+"$BLUEPRINT_DIR/scripts/adopt.sh" --framework python
+
+# Layout B
+./.agency/scripts/adopt.sh --framework python
+
+claude                                            # start a session
+```
+
+`--framework` must be one of `python`, `node`, `nextjs`, `nestjs`. For `python` and `nestjs`, the backend deny-list is merged automatically (`--profile backend`).
+
+## What ends up committed vs gitignored
+
+**Committed to your repo** (small, reviewable):
+- `CLAUDE.md` — project context for Claude.
+- `.pre-commit-config.yaml` — team-shared lint rules.
+- `.gitignore` — two new lines: `/.claude/` and (nested only) `/.agency/`.
+
+**Gitignored** (per-developer, local only):
+- `.claude/` — everything adopt creates.
+- `.agency/` (nested only) — the blueprint clone.
+- `$HOME/.claude-agency/` — event log and inbox, already per-user.
+
+## Updates
+
+Layout A:
+```bash
+git -C "$BLUEPRINT_DIR" pull
+git -C "$BLUEPRINT_DIR" submodule update --remote
+# Symlinked content (skills/commands) propagates automatically.
+# Refresh copied files (agents, hooks, settings):
+"$BLUEPRINT_DIR/scripts/adopt.sh" --framework python --force
+```
+
+Layout B:
+```bash
+cd ~/work/my-backend-project
+git -C .agency pull
+git -C .agency submodule update --remote
+./.agency/scripts/adopt.sh --framework python --force
+```
+
+## Uninstall
+
+```bash
+"$BLUEPRINT_DIR/scripts/adopt.sh" --uninstall
+```
+
+Removes `.claude/` and the two `.gitignore` lines adopt added. Leaves backups (`.claude.bak-*`) and `.agency/` (nested) untouched — delete manually if you want them gone.
+
+## Troubleshooting
+
+**"Cannot resolve blueprint location."** — `BLUEPRINT_DIR` is unset and you're not running from a nested `.agency/`. Export the variable or `cd` into a project with a `.agency/` sibling.
+
+**"Working tree is dirty."** — `git status` shows changes. Stash or commit first, or pass `--force`.
+
+**"`.claude/` exists and was not created by adopt."** — You have a prior Claude Code config. Back it up yourself, or pass `--force` (adopt will move it to `.claude.bak-<timestamp>/`).
+
+**"Dead symlink" warning at session start (Layout A)** — You moved the blueprint folder. Run `"$BLUEPRINT_DIR/scripts/adopt.sh" --framework <fw> --force` to repair.
+
+**`jq: command not found`** — `brew install jq` or `apt install jq`. Required for `--profile backend` and the `--doctor` hook.
+
+## Safety notes
+
+- `--profile backend` (default for python/nestjs) blocks: direct DB shells (`psql`, `mysql`, `redis-cli`), migration apply (`alembic upgrade`, `prisma migrate deploy`, etc.), cluster CLIs (`kubectl`, `terraform apply`, `aws`, `gcloud`), pushes to `main|master|staging|production`.
+- Claude Code cannot edit your `.env*`, `*credentials*`, `*secret*` files — hard-denied in `settings.json`.
+- Nothing adopt writes leaves your laptop. The `.claude-agency/` event log is local too.

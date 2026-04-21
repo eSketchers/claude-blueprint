@@ -97,7 +97,156 @@ fi
 
 # ---------- Dispatch ----------
 case "$ACTION" in
-  adopt)     log "TODO: adopt action pending implementation (Task 6)"; exit 0 ;;
+  adopt)
+    [[ -n "$FRAMEWORK" ]] || die "--framework is required"
+    case "$FRAMEWORK" in python|node|nextjs|nestjs) ;; *) die "Unknown framework: $FRAMEWORK" ;; esac
+
+    # Preflight: working tree clean (unless --force)
+    if [[ $FORCE -eq 0 ]]; then
+      if ! git -C "$PROJECT_ROOT" diff --quiet || ! git -C "$PROJECT_ROOT" diff --cached --quiet; then
+        die "Working tree is dirty. Commit or stash first, or pass --force."
+      fi
+    fi
+
+    # Blueprint submodules must be initialized
+    if [[ ! -d "$BLUEPRINT_RESOLVED/vendor/superpowers/skills" ]]; then
+      log "Initializing blueprint submodules..."
+      git -C "$BLUEPRINT_RESOLVED" submodule update --init --recursive
+    fi
+
+    # Existing .claude/ protection
+    CLAUDE_DIR="$PROJECT_ROOT/.claude"
+    if [[ -e "$CLAUDE_DIR" ]]; then
+      if [[ -f "$CLAUDE_DIR/.adopted-from-blueprint" ]]; then
+        log "Found prior adoption — refreshing."
+      elif [[ $FORCE -eq 1 ]]; then
+        ts="$(date +%Y%m%d-%H%M%S)"
+        log "Existing .claude/ backed up to .claude.bak-$ts/"
+        mv "$CLAUDE_DIR" "$PROJECT_ROOT/.claude.bak-$ts"
+      else
+        die ".claude/ exists and was not created by adopt. Re-run with --force to back it up and proceed."
+      fi
+    fi
+
+    # --- Source helper ---
+    # shellcheck source=scripts/lib/symlinks.sh
+    source "$BLUEPRINT_RESOLVED/scripts/lib/symlinks.sh"
+
+    # --- Layout ---
+    [[ $DRY_RUN -eq 1 ]] && log "DRY RUN — no changes will be written"
+
+    run() { if [[ $DRY_RUN -eq 1 ]]; then printf '  DRY: %s\n' "$*"; else eval "$@"; fi; }
+
+    run "mkdir -p \"$CLAUDE_DIR/agents\" \"$CLAUDE_DIR/commands\" \"$CLAUDE_DIR/skills\" \"$CLAUDE_DIR/hooks\""
+
+    # Copies
+    for f in "$BLUEPRINT_RESOLVED"/.claude/agents/*.md; do
+      run "cp \"$f\" \"$CLAUDE_DIR/agents/$(basename "$f")\""
+    done
+    for f in "$BLUEPRINT_RESOLVED"/.claude/commands/*.md; do
+      run "cp \"$f\" \"$CLAUDE_DIR/commands/$(basename "$f")\""
+    done
+    for f in "$BLUEPRINT_RESOLVED"/.claude/hooks/*.sh; do
+      run "cp \"$f\" \"$CLAUDE_DIR/hooks/$(basename "$f")\""
+      run "chmod +x \"$CLAUDE_DIR/hooks/$(basename "$f")\""
+    done
+    run "cp \"$BLUEPRINT_RESOLVED/.claude/settings.json\" \"$CLAUDE_DIR/settings.json\""
+
+    # Symlinks (mode-dependent)
+    LINK=link_absolute
+    [[ "$MODE" == "nested" ]] && LINK=link_relative
+
+    SP="$BLUEPRINT_RESOLVED/vendor/superpowers"
+    for skill_dir in "$SP"/skills/*/; do
+      [[ -d "$skill_dir" ]] || continue
+      sname="$(basename "$skill_dir")"
+      if [[ $DRY_RUN -eq 1 ]]; then
+        printf '  DRY: %s %s %s\n' "$LINK" "$skill_dir" "$CLAUDE_DIR/skills/$sname"
+      else
+        "$LINK" "${skill_dir%/}" "$CLAUDE_DIR/skills/$sname"
+      fi
+    done
+    for cmd_file in "$SP"/commands/*.md; do
+      [[ -f "$cmd_file" ]] || continue
+      cname="$(basename "$cmd_file")"
+      [[ -e "$CLAUDE_DIR/commands/$cname" ]] && continue   # don't clobber blueprint-owned commands
+      if [[ $DRY_RUN -eq 1 ]]; then
+        printf '  DRY: %s %s %s\n' "$LINK" "$cmd_file" "$CLAUDE_DIR/commands/$cname"
+      else
+        "$LINK" "$cmd_file" "$CLAUDE_DIR/commands/$cname"
+      fi
+    done
+    if [[ -f "$SP/agents/code-reviewer.md" ]]; then
+      if [[ $DRY_RUN -eq 1 ]]; then
+        printf '  DRY: %s %s %s\n' "$LINK" "$SP/agents/code-reviewer.md" "$CLAUDE_DIR/agents/code-reviewer.md"
+      else
+        "$LINK" "$SP/agents/code-reviewer.md" "$CLAUDE_DIR/agents/code-reviewer.md"
+      fi
+    fi
+
+    # Marker file
+    if [[ $DRY_RUN -eq 0 ]]; then
+      sha="$(git -C "$BLUEPRINT_RESOLVED" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+      cat > "$CLAUDE_DIR/.adopted-from-blueprint" <<EOF
+{
+  "blueprint_sha": "$sha",
+  "blueprint_dir": "$BLUEPRINT_RESOLVED",
+  "mode": "$MODE",
+  "framework": "$FRAMEWORK",
+  "profile": "$PROFILE",
+  "adopted_at": "$(date -Iseconds)"
+}
+EOF
+    fi
+
+    # CLAUDE.md — only if project has none
+    if [[ ! -f "$PROJECT_ROOT/CLAUDE.md" ]]; then
+      run "cp \"$BLUEPRINT_RESOLVED/templates/CLAUDE.md.$FRAMEWORK\" \"$PROJECT_ROOT/CLAUDE.md\""
+    else
+      log "Existing CLAUDE.md preserved. See $BLUEPRINT_RESOLVED/templates/CLAUDE.md.$FRAMEWORK for reference."
+    fi
+
+    # Gitignore append (idempotent)
+    ensure_gitignore_line() {
+      local line="$1"
+      local gi="$PROJECT_ROOT/.gitignore"
+      [[ -f "$gi" ]] || run "touch \"$gi\""
+      if ! grep -qxF "$line" "$gi" 2>/dev/null; then
+        run "printf '\n%s\n' \"$line\" >> \"$gi\""
+      fi
+    }
+    ensure_gitignore_line "/.claude/"
+    [[ "$MODE" == "nested" ]] && ensure_gitignore_line "/.agency/"
+
+    # pre-commit
+    if [[ $NO_PRECOMMIT -eq 0 ]]; then
+      PC_SRC=""
+      case "$FRAMEWORK" in
+        python) PC_SRC="$BLUEPRINT_RESOLVED/pre-commit/.pre-commit-config.python.yaml" ;;
+        node|nextjs|nestjs) PC_SRC="$BLUEPRINT_RESOLVED/pre-commit/.pre-commit-config.node.yaml" ;;
+      esac
+      if [[ -n "$PC_SRC" && -f "$PC_SRC" && ! -f "$PROJECT_ROOT/.pre-commit-config.yaml" ]]; then
+        run "cp \"$PC_SRC\" \"$PROJECT_ROOT/.pre-commit-config.yaml\""
+      fi
+      if [[ $DRY_RUN -eq 0 ]] && command -v pre-commit >/dev/null 2>&1; then
+        (cd "$PROJECT_ROOT" && pre-commit install >/dev/null 2>&1 || warn "pre-commit install failed")
+      fi
+    fi
+
+    # Self-test: one symlink must resolve
+    if [[ $DRY_RUN -eq 0 ]]; then
+      if [[ ! -e "$CLAUDE_DIR/skills/brainstorming/SKILL.md" ]]; then
+        warn "Self-test failed: .claude/skills/brainstorming/SKILL.md does not resolve"
+        die "Adoption self-test failed — .claude/ may be partially provisioned. Run --uninstall to roll back."
+      fi
+    fi
+
+    log "Adoption complete."
+    log "  Gitignored: .claude/$([[ $MODE == nested ]] && echo ', .agency/')"
+    log "  Committed:  CLAUDE.md, .pre-commit-config.yaml, .gitignore"
+    log ""
+    log "Next: run 'claude' in this project."
+    ;;
   uninstall) log "TODO: uninstall action pending implementation (Task 9)"; exit 0 ;;
   doctor)    log "TODO: doctor action pending implementation (Task 10)"; exit 0 ;;
 esac

@@ -13,14 +13,18 @@ assert() {
 
 test_sibling_python_adopt() {
   echo "== test_sibling_python_adopt =="
-  local tmp; tmp=$(mktemp -d)
+  local tmp rc
+  tmp=$(mktemp -d)
+  rc=0
   (
     cd "$tmp"
     git init -q
     git commit -q --allow-empty -m "init"
     BLUEPRINT_DIR="$BLUEPRINT" "$BLUEPRINT/scripts/adopt.sh" --framework python >/dev/null
-  )
+  ) || rc=$?
+  assert "adopt exits 0" "[[ $rc -eq 0 ]]"
   assert "marker file exists" "[[ -f '$tmp/.claude/.adopted-from-blueprint' ]]"
+  assert "marker is valid JSON" "jq . '$tmp/.claude/.adopted-from-blueprint' > /dev/null 2>&1"
   assert "backend-dev agent copied (regular file)" "[[ -f '$tmp/.claude/agents/backend-dev.md' && ! -L '$tmp/.claude/agents/backend-dev.md' ]]"
   assert "brainstorming skill symlinked" "[[ -L '$tmp/.claude/skills/brainstorming' && -e '$tmp/.claude/skills/brainstorming/SKILL.md' ]]"
   assert ".gitignore has /.claude/" "grep -qxF '/.claude/' '$tmp/.gitignore'"

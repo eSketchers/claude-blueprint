@@ -141,12 +141,15 @@ case "$ACTION" in
 
     # Copies
     for f in "$BLUEPRINT_RESOLVED"/.claude/agents/*.md; do
+      [[ -f "$f" ]] || continue
       run "cp \"$f\" \"$CLAUDE_DIR/agents/$(basename "$f")\""
     done
     for f in "$BLUEPRINT_RESOLVED"/.claude/commands/*.md; do
+      [[ -f "$f" ]] || continue
       run "cp \"$f\" \"$CLAUDE_DIR/commands/$(basename "$f")\""
     done
     for f in "$BLUEPRINT_RESOLVED"/.claude/hooks/*.sh; do
+      [[ -f "$f" ]] || continue
       run "cp \"$f\" \"$CLAUDE_DIR/hooks/$(basename "$f")\""
       run "chmod +x \"$CLAUDE_DIR/hooks/$(basename "$f")\""
     done
@@ -184,19 +187,19 @@ case "$ACTION" in
       fi
     fi
 
-    # Marker file
+    # Marker file — built via jq so path/sha/timestamp values are properly escaped JSON
     if [[ $DRY_RUN -eq 0 ]]; then
+      command -v jq >/dev/null 2>&1 || die "jq required to write the adoption marker. Install jq first."
       sha="$(git -C "$BLUEPRINT_RESOLVED" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-      cat > "$CLAUDE_DIR/.adopted-from-blueprint" <<EOF
-{
-  "blueprint_sha": "$sha",
-  "blueprint_dir": "$BLUEPRINT_RESOLVED",
-  "mode": "$MODE",
-  "framework": "$FRAMEWORK",
-  "profile": "$PROFILE",
-  "adopted_at": "$(date -Iseconds)"
-}
-EOF
+      jq -n \
+        --arg blueprint_sha "$sha" \
+        --arg blueprint_dir "$BLUEPRINT_RESOLVED" \
+        --arg mode          "$MODE" \
+        --arg framework     "$FRAMEWORK" \
+        --arg profile       "$PROFILE" \
+        --arg adopted_at    "$(date -Iseconds)" \
+        '{blueprint_sha:$blueprint_sha, blueprint_dir:$blueprint_dir, mode:$mode, framework:$framework, profile:$profile, adopted_at:$adopted_at}' \
+        > "$CLAUDE_DIR/.adopted-from-blueprint"
     fi
 
     # CLAUDE.md — only if project has none
@@ -243,7 +246,7 @@ EOF
 
     log "Adoption complete."
     log "  Gitignored: .claude/$([[ $MODE == nested ]] && echo ', .agency/')"
-    log "  Committed:  CLAUDE.md, .pre-commit-config.yaml, .gitignore"
+    log "  Written to working tree (review, then commit yourself): CLAUDE.md, .pre-commit-config.yaml, .gitignore"
     log ""
     log "Next: run 'claude' in this project."
     ;;

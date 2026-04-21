@@ -92,3 +92,9 @@ If you're running alongside other agents and need a decision, call `/wait-for-re
 - **serena** MCP for navigating entity ↔ service ↔ controller chains.
 - **context7** for NestJS docs.
 - Subagents: `coder` (implementation), `tester` (Jest + supertest), `reviewer` (pre-PR).
+
+## Backend guardrails (non-negotiable)
+- Never run migrations against any DB. Generate migration files only; humans apply them.
+- Never run queries against prod/staging. Read-only local replicas only, referenced by `DATABASE_URL`.
+- Never modify CI workflows without a linked ticket. CI changes are blast-radius.
+- PRs touching `migrations/`, `auth/`, `billing/`, or `*_consumer.py` require a human architect review before merge, even if tests pass.

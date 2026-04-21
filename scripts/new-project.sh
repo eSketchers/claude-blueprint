@@ -44,42 +44,42 @@ cp "$BLUEPRINT_DIR"/.claude/agents/*.md "$TARGET/.claude/agents/"
 cp "$BLUEPRINT_DIR"/.claude/settings.json "$TARGET/.claude/settings.json"
 
 # --- Superpowers: symlink skills + commands + code-reviewer agent ---
+# shellcheck source=./lib/symlinks.sh
+source "$BLUEPRINT_DIR/scripts/lib/symlinks.sh"
+
 SP="$BLUEPRINT_DIR/vendor/superpowers"
 
 for skill in "$SP"/skills/*/; do
   [[ -d "$skill" ]] || continue
-  sname="$(basename "$skill")"
-  ln -sfn "$skill" "$TARGET/.claude/skills/$sname"
+  link_absolute "${skill%/}" "$TARGET/.claude/skills/$(basename "$skill")"
 done
 
 for cmd in "$SP"/commands/*.md; do
   [[ -f "$cmd" ]] || continue
-  cname="$(basename "$cmd")"
-  ln -sfn "$cmd" "$TARGET/.claude/commands/$cname"
+  link_absolute "$cmd" "$TARGET/.claude/commands/$(basename "$cmd")"
 done
 
-ln -sfn "$SP/agents/code-reviewer.md" "$TARGET/.claude/agents/code-reviewer.md"
+link_absolute "$SP/agents/code-reviewer.md" "$TARGET/.claude/agents/code-reviewer.md"
 
 # --- Our workflow commands (ticket.md, etc.) ---
 if [[ -d "$BLUEPRINT_DIR/.claude/commands" ]]; then
   for cmd in "$BLUEPRINT_DIR"/.claude/commands/*.md; do
     [[ -f "$cmd" ]] || continue
     cname="$(basename "$cmd")"
-    # Don't clobber superpowers commands with same name
     [[ -e "$TARGET/.claude/commands/$cname" ]] && continue
     cp "$cmd" "$TARGET/.claude/commands/$cname"
   done
 fi
 
-# --- Hooks (ticket detection + dashboard telemetry) ---
+# --- Hooks ---
 if [[ -d "$BLUEPRINT_DIR/.claude/hooks" ]]; then
   mkdir -p "$TARGET/.claude/hooks"
   cp -R "$BLUEPRINT_DIR"/.claude/hooks/. "$TARGET/.claude/hooks/"
   chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
 fi
 
-# --- Dashboard (symlinked — one dashboard for all projects) ---
-ln -sfn "$BLUEPRINT_DIR/dashboard" "$TARGET/.claude/dashboard"
+# --- Dashboard (absolute symlink — shared across projects) ---
+link_absolute "$BLUEPRINT_DIR/dashboard" "$TARGET/.claude/dashboard"
 
 # --- Workflow scripts (feature-ticket pipeline) ---
 if [[ -d "$BLUEPRINT_DIR/scripts/workflow" ]]; then

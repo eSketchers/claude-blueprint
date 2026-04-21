@@ -18,14 +18,14 @@ set -u
 link_absolute() {
   local src="$1" dst="$2"
   [[ -e "$src" ]] || { printf 'link_absolute: source missing: %s\n' "$src" >&2; return 1; }
-  mkdir -p "$(dirname "$dst")"
+  mkdir -p "$(dirname "$dst")" || return 1
   ln -sfn "$src" "$dst"
 }
 
 link_relative() {
   local src="$1" dst="$2"
   [[ -e "$src" ]] || { printf 'link_relative: source missing: %s\n' "$src" >&2; return 1; }
-  mkdir -p "$(dirname "$dst")"
+  mkdir -p "$(dirname "$dst")" || return 1
   local rel
   rel="$(compute_relative_path "$(dirname "$dst")" "$src")"
   ln -sfn "$rel" "$dst"

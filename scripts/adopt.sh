@@ -155,6 +155,24 @@ case "$ACTION" in
     done
     run "cp \"$BLUEPRINT_RESOLVED/.claude/settings.json\" \"$CLAUDE_DIR/settings.json\""
 
+    # Profile merge
+    if [[ "$PROFILE" == "backend" ]]; then
+      command -v jq >/dev/null 2>&1 || die "jq required for --profile backend merge. Install jq or pass --profile none."
+      FRAG="$BLUEPRINT_RESOLVED/scripts/lib/backend-deny.json"
+      [[ -f "$FRAG" ]] || die "Missing deny fragment: $FRAG"
+      if [[ $DRY_RUN -eq 0 ]]; then
+        tmp_settings="$(mktemp)"
+        jq --slurpfile frag "$FRAG" '
+          .permissions.deny = ((.permissions.deny // []) + ($frag[0].deny // []) | unique)
+        ' "$CLAUDE_DIR/settings.json" > "$tmp_settings"
+        mv "$tmp_settings" "$CLAUDE_DIR/settings.json"
+        rule_count="$(jq '.deny | length' "$FRAG")"
+        log "Merged backend deny-list ($rule_count rules)."
+      else
+        printf '  DRY: jq-merge backend deny-list into settings.json\n'
+      fi
+    fi
+
     # Symlinks (mode-dependent)
     LINK=link_absolute
     [[ "$MODE" == "nested" ]] && LINK=link_relative

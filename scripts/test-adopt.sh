@@ -31,5 +31,24 @@ test_sibling_python_adopt() {
   rm -rf "$tmp"
 }
 
+test_backend_profile_merged() {
+  echo "== test_backend_profile_merged =="
+  local tmp rc
+  tmp=$(mktemp -d)
+  rc=0
+  (
+    cd "$tmp"
+    git init -q
+    git commit -q --allow-empty -m "init"
+    BLUEPRINT_DIR="$BLUEPRINT" "$BLUEPRINT/scripts/adopt.sh" --framework python >/dev/null
+  ) || rc=$?
+  assert "adopt (profile backend default) exits 0"         "[[ $rc -eq 0 ]]"
+  assert "deny contains Bash(alembic upgrade:*)"           "jq -e '.permissions.deny | index(\"Bash(alembic upgrade:*)\")' '$tmp/.claude/settings.json' > /dev/null"
+  assert "deny contains Bash(kubectl:*)"                   "jq -e '.permissions.deny | index(\"Bash(kubectl:*)\")'          '$tmp/.claude/settings.json' > /dev/null"
+  assert "deny still contains baseline Write(.env*)"       "jq -e '.permissions.deny | index(\"Write(.env*)\")'              '$tmp/.claude/settings.json' > /dev/null"
+  rm -rf "$tmp"
+}
+
 test_sibling_python_adopt
+test_backend_profile_merged
 exit $FAILED

@@ -1,0 +1,23 @@
+{
+  "deny": [
+    "Bash(psql:*)",
+    "Bash(mysql:*)",
+    "Bash(redis-cli:*)",
+    "Bash(alembic upgrade:*)",
+    "Bash(alembic downgrade:*)",
+    "Bash(prisma migrate deploy:*)",
+    "Bash(django-admin migrate:*)",
+    "Bash(manage.py migrate:*)",
+    "Bash(kubectl:*)",
+    "Bash(terraform apply:*)",
+    "Bash(terraform destroy:*)",
+    "Bash(aws:*)",
+    "Bash(gcloud:*)",
+    "Bash(git push:* origin main*)",
+    "Bash(git push:* origin master*)",
+    "Bash(git push:* origin staging*)",
+    "Bash(git push:* origin production*)",
+    "Write(**/migrations/*)",
+    "Write(**/alembic/versions/*)"
+  ]
+}

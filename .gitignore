@@ -1,1 +1,4 @@
 .worktrees/
+
+# A dev may accidentally nest this blueprint inside another project.
+.agency/

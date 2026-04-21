@@ -67,7 +67,28 @@ test_uninstall_is_clean() {
   rm -rf "$tmp"
 }
 
+test_doctor_reports_dead_symlink() {
+  echo "== test_doctor_reports_dead_symlink =="
+  local tmp blueprint_copy rc
+  tmp=$(mktemp -d)
+  blueprint_copy=$(mktemp -d)
+  cp -R "$BLUEPRINT"/. "$blueprint_copy/"
+  (
+    cd "$tmp"
+    git init -q
+    git commit -q --allow-empty -m "init"
+    BLUEPRINT_DIR="$blueprint_copy" "$blueprint_copy/scripts/adopt.sh" --framework python >/dev/null
+  )
+  # Move the blueprint — symlinks now dead
+  rm -rf "$blueprint_copy"
+  rc=0
+  (cd "$tmp" && BLUEPRINT_DIR="$BLUEPRINT" "$BLUEPRINT/scripts/adopt.sh" --doctor --quiet) 2>/dev/null || rc=$?
+  assert "doctor exits non-zero on broken symlinks" "[[ $rc -ne 0 ]]"
+  rm -rf "$tmp"
+}
+
 test_sibling_python_adopt
 test_backend_profile_merged
 test_uninstall_is_clean
+test_doctor_reports_dead_symlink
 exit $FAILED

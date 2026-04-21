@@ -262,6 +262,17 @@ case "$ACTION" in
       fi
     fi
 
+    # Install --doctor as a SessionStart hook (sibling mode only —
+    # nested mode uses relative links, immune to blueprint moves)
+    if [[ "$MODE" == "sibling" && $DRY_RUN -eq 0 ]]; then
+      SETTINGS="$CLAUDE_DIR/settings.json"
+      tmp_settings="$(mktemp)"
+      jq --arg cmd "$BLUEPRINT_RESOLVED/scripts/adopt.sh --doctor --quiet" '
+        .hooks.SessionStart += [ { "hooks": [ { "type": "command", "command": $cmd } ] } ]
+      ' "$SETTINGS" > "$tmp_settings"
+      mv "$tmp_settings" "$SETTINGS"
+    fi
+
     log "Adoption complete."
     log "  Gitignored: .claude/$([[ $MODE == nested ]] && echo ', .agency/')"
     log "  Written to working tree (review, then commit yourself): CLAUDE.md, .pre-commit-config.yaml, .gitignore"
@@ -294,5 +305,24 @@ case "$ACTION" in
 
     log "Uninstalled. .agency/ (if present) untouched — delete manually if desired."
     ;;
-  doctor)    log "TODO: doctor action pending implementation (Task 10)"; exit 0 ;;
+  doctor)
+    CLAUDE_DIR="$PROJECT_ROOT/.claude"
+    MARKER="$CLAUDE_DIR/.adopted-from-blueprint"
+    [[ -f "$MARKER" ]] || { [[ $QUIET -eq 1 ]] || warn "No adopt marker in $CLAUDE_DIR"; exit 2; }
+
+    # Walk symlinks under .claude/ and report dead ones
+    DEAD=0
+    while IFS= read -r link; do
+      if [[ ! -e "$link" ]]; then
+        [[ $QUIET -eq 1 ]] || warn "Dead symlink: $link"
+        DEAD=$((DEAD+1))
+      fi
+    done < <(find "$CLAUDE_DIR" -type l 2>/dev/null)
+
+    if [[ $DEAD -gt 0 ]]; then
+      [[ $QUIET -eq 1 ]] || warn "$DEAD dead symlink(s). Re-run adopt.sh --force to repair."
+      exit 1
+    fi
+    [[ $QUIET -eq 1 ]] || log "All $(find "$CLAUDE_DIR" -type l | wc -l) symlinks OK."
+    ;;
 esac

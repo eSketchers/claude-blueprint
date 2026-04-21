@@ -268,6 +268,31 @@ case "$ACTION" in
     log ""
     log "Next: run 'claude' in this project."
     ;;
-  uninstall) log "TODO: uninstall action pending implementation (Task 9)"; exit 0 ;;
+  uninstall)
+    CLAUDE_DIR="$PROJECT_ROOT/.claude"
+    if [[ -d "$CLAUDE_DIR" && -f "$CLAUDE_DIR/.adopted-from-blueprint" ]]; then
+      log "Removing $CLAUDE_DIR"
+      rm -rf "$CLAUDE_DIR"
+    elif [[ -d "$CLAUDE_DIR" ]]; then
+      die ".claude/ exists but has no adopt marker. Not touching it. Inspect manually."
+    fi
+
+    # List any .claude.bak-* directories that --force created; do NOT delete
+    for bak in "$PROJECT_ROOT"/.claude.bak-*; do
+      [[ -e "$bak" ]] || continue
+      log "Leaving backup dir in place: $(basename "$bak")"
+    done
+
+    # Strip the two lines adopt appended to .gitignore
+    GI="$PROJECT_ROOT/.gitignore"
+    if [[ -f "$GI" ]]; then
+      tmp_gi="$(mktemp)"
+      grep -vxF -e "/.claude/" -e "/.agency/" "$GI" > "$tmp_gi" || true
+      mv "$tmp_gi" "$GI"
+      # An empty .gitignore is fine; user can delete it if they want.
+    fi
+
+    log "Uninstalled. .agency/ (if present) untouched — delete manually if desired."
+    ;;
   doctor)    log "TODO: doctor action pending implementation (Task 10)"; exit 0 ;;
 esac

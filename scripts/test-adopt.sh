@@ -49,6 +49,25 @@ test_backend_profile_merged() {
   rm -rf "$tmp"
 }
 
+test_uninstall_is_clean() {
+  echo "== test_uninstall_is_clean =="
+  local tmp rc
+  tmp=$(mktemp -d)
+  rc=0
+  (
+    cd "$tmp"
+    git init -q
+    git commit -q --allow-empty -m "init"
+    BLUEPRINT_DIR="$BLUEPRINT" "$BLUEPRINT/scripts/adopt.sh" --framework python >/dev/null
+    BLUEPRINT_DIR="$BLUEPRINT" "$BLUEPRINT/scripts/adopt.sh" --uninstall >/dev/null
+  ) || rc=$?
+  assert "adopt then uninstall exit 0"              "[[ $rc -eq 0 ]]"
+  assert ".claude/ removed"                         "[[ ! -e '$tmp/.claude' ]]"
+  assert ".gitignore /.claude/ line removed"        "! grep -qxF '/.claude/' '$tmp/.gitignore' 2>/dev/null"
+  rm -rf "$tmp"
+}
+
 test_sibling_python_adopt
 test_backend_profile_merged
+test_uninstall_is_clean
 exit $FAILED

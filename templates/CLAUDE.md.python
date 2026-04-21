@@ -101,3 +101,9 @@ Don't use `/wait-for-reply` for trivial questions — only when you're genuinely
 - Use **context7** MCP for up-to-date docs of third-party libraries.
 - Use **playwright** MCP only if this project has a web UI.
 - Invoke the `tester` subagent for writing test suites, the `reviewer` subagent for pre-PR review.
+
+## Backend guardrails (non-negotiable)
+- Never run migrations against any DB. Generate migration files only; humans apply them.
+- Never run queries against prod/staging. Read-only local replicas only, referenced by `DATABASE_URL`.
+- Never modify CI workflows without a linked ticket. CI changes are blast-radius.
+- PRs touching `migrations/`, `auth/`, `billing/`, or `*_consumer.py` require a human architect review before merge, even if tests pass.

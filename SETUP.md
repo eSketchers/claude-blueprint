@@ -177,7 +177,7 @@ The blueprint ships templates for:
 
 ```bash
 cd ~/your/projects/parent-directory
-~/work/claude-agency-blueprint/scripts/new-project.sh my-new-app nextjs
+"$BLUEPRINT_DIR/scripts/new-project.sh" my-new-app nextjs
 ```
 
 What it does:
@@ -207,91 +207,17 @@ Inside Claude Code, type `/ticket <ticket-url>` to start your first piece of wor
 
 ## Path B — Adopt into an existing project
 
-Use this when the project already exists and you want to layer the blueprint on without disruption.
-
-### Step 1 — Back up or branch
+See **[docs/LOCAL-ADOPTION.md](./docs/LOCAL-ADOPTION.md)** for the full adoption guide, or use the one-command flow:
 
 ```bash
-cd ~/projects/existing-app
-git switch -c chore/adopt-agency-blueprint
+export BLUEPRINT_DIR=~/work/claude-agency-blueprint
+cd ~/path/to/existing-app
+"$BLUEPRINT_DIR/scripts/adopt.sh" --framework python    # or node|nextjs|nestjs
 ```
 
-Never drop the blueprint onto `main` / `staging` directly.
+The script is idempotent, detects sibling vs nested layout automatically, gitignores its output, and supports `--uninstall` and `--doctor`.
 
-### Step 2 — Copy agents + hooks (do **not** copy settings.json blindly)
-
-```bash
-BP=~/work/claude-agency-blueprint
-
-# Role agents (copy — these are yours to edit per project)
-mkdir -p .claude/agents .claude/commands .claude/skills .claude/hooks
-cp -n "$BP"/.claude/agents/*.md            .claude/agents/
-cp -n "$BP"/.claude/commands/ticket.md     .claude/commands/
-cp    "$BP"/.claude/hooks/agency-emit.sh   .claude/hooks/
-cp    "$BP"/.claude/hooks/detect-ticket.sh .claude/hooks/
-chmod +x .claude/hooks/*.sh
-
-# Superpowers skills/commands/code-reviewer (symlink — stays upstream-managed)
-for skill in "$BP"/vendor/superpowers/skills/*/; do
-  ln -sfn "$skill" ".claude/skills/$(basename "$skill")"
-done
-for cmd in "$BP"/vendor/superpowers/commands/*.md; do
-  ln -sfn "$cmd" ".claude/commands/$(basename "$cmd")"
-done
-ln -sfn "$BP"/vendor/superpowers/agents/code-reviewer.md .claude/agents/code-reviewer.md
-
-# Dashboard (symlink — one dashboard for all projects)
-ln -sfn "$BP/dashboard" .claude/dashboard
-```
-
-### Step 3 — Merge `settings.json` carefully
-
-If you don't already have a `.claude/settings.json`, just copy the blueprint's:
-
-```bash
-cp "$BP"/.claude/settings.json .claude/settings.json
-```
-
-If you **do** have one, merge manually — specifically, add the `hooks` block from the blueprint to yours. Overlapping hook registrations are fine; they all run.
-
-### Step 4 — CLAUDE.md
-
-The blueprint templates are opinionated agency defaults. For an existing project you can either:
-
-**Option 1 — Replace wholesale** if the project has no CLAUDE.md or a trivial one:
-
-```bash
-cp "$BP"/templates/CLAUDE.md.<framework> CLAUDE.md
-```
-
-**Option 2 — Keep yours, link ours** if the project already has a well-curated CLAUDE.md. Add this line near the top:
-
-```markdown
-> This project extends the [Agency Blueprint](../claude-agency-blueprint/CLAUDE.md) — all baseline rules there apply unless overridden below.
-```
-
-Then only document the deltas.
-
-### Step 5 — pre-commit
-
-```bash
-# Pick the config matching the project's primary language
-cp "$BP"/pre-commit/.pre-commit-config.python.yaml .pre-commit-config.yaml
-# or
-cp "$BP"/pre-commit/.pre-commit-config.node.yaml   .pre-commit-config.yaml
-
-pre-commit install
-pre-commit run --all-files   # may flag existing style issues — fix in a separate PR
-```
-
-### Step 6 — Commit
-
-```bash
-git add -A
-git commit -m "chore: adopt agency-blueprint (agents, hooks, pre-commit, dashboard)"
-```
-
-Open a PR for your team to review before merging.
+For rolling this out across a team, see **[docs/TEAM-ONBOARDING.md](./docs/TEAM-ONBOARDING.md)** — a one-page handoff you can share.
 
 ---
 
@@ -300,14 +226,14 @@ Open a PR for your team to review before merging.
 The dashboard is **shared across all your projects** — you run it once and it watches every project that has the blueprint's hooks wired up.
 
 ```bash
-node ~/work/claude-agency-blueprint/dashboard/server.mjs
+node "$BLUEPRINT_DIR/dashboard/server.mjs"
 # → http://127.0.0.1:7842
 ```
 
 To run it as a background service on Linux / macOS:
 
 ```bash
-nohup node ~/work/claude-agency-blueprint/dashboard/server.mjs \
+nohup node "$BLUEPRINT_DIR/dashboard/server.mjs" \
   > ~/.claude-agency/server.log 2>&1 &
 ```
 
@@ -392,7 +318,7 @@ The PR body will contain the v2 plan as its description. Review as usual, reques
 
 After your first ticket, the typical day looks like:
 
-1. `node ~/work/claude-agency-blueprint/dashboard/server.mjs &` — dashboard runs in the background.
+1. `node "$BLUEPRINT_DIR/dashboard/server.mjs" &` — dashboard runs in the background.
 2. `cd ~/projects/my-app && claude` — open Claude Code in one or more projects.
 3. Paste a ticket URL or `/ticket <url>` for each piece of work.
 4. Check the dashboard when you want a cross-project view of what's in-flight or waiting on you.
@@ -444,7 +370,7 @@ If your team uses a framework not in `templates/` (e.g. Rails, Go, Rust, Django)
 Vendored submodules in the blueprint lag behind upstream. Refresh periodically:
 
 ```bash
-cd ~/work/claude-agency-blueprint
+cd "$BLUEPRINT_DIR"
 
 # Update all 4 vendor submodules to their latest tracked branch
 git submodule update --remote
@@ -485,7 +411,7 @@ Harmless — `bootstrap.sh` is idempotent but doesn't pre-check. The MCP is regi
 Usually a network issue or a rate limit on `github.com`. Try again, or shallow-clone manually:
 
 ```bash
-cd ~/work/claude-agency-blueprint
+cd "$BLUEPRINT_DIR"
 git submodule update --init --depth 1
 ```
 

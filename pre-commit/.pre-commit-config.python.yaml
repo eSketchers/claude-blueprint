@@ -1,3 +1,5 @@
+# pre-commit config for Python projects using the agency blueprint.
+# Fast, opinionated defaults. Projects may replace any block.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
@@ -6,51 +8,18 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
-        args: ['--maxkb=500']
       - id: check-merge-conflict
       - id: detect-private-key
-      - id: check-json
-      - id: check-toml
 
-  - repo: https://github.com/psf/black
-    rev: 24.8.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.0
     hooks:
-      - id: black
-        language_version: python3.11
-        args: ['--line-length=100']
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
 
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        args: ['--profile=black', '--line-length=100']
-
-  - repo: https://github.com/pycqa/flake8
-    rev: 7.1.1
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.1.0
     hooks:
       - id: flake8
-        args:
-          - '--max-line-length=100'
-          - '--extend-ignore=E203,W503'
-          - '--exclude=.venv,venv,migrations,__pycache__'
-
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.11.2
-    hooks:
-      - id: mypy
-        args: ['--ignore-missing-imports', '--install-types', '--non-interactive']
-        additional_dependencies: []
-
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.21.0
-    hooks:
-      - id: gitleaks
-
-  - repo: local
-    hooks:
-      - id: pytest-fast
-        name: pytest (fast, pre-push only)
-        entry: pytest -x -q -m 'not slow'
-        language: system
-        pass_filenames: false
-        stages: [pre-push]
+        additional_dependencies: ["flake8-bugbear"]

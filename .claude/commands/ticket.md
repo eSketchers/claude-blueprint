@@ -12,6 +12,8 @@ Optional flag `--auto` skips the human approval gate after the improved plan.
 
 ## Phase 0 — Fetch & classify
 
+**Use haiku model for this phase** - simple classification task, saves ~70% tokens.
+
 1. Parse the ticket reference. Detect source:
    - `app.clickup.com` or bare ClickUp ID → use `mcp__claude_ai_ClickUp__clickup_get_task`
    - `linear.app` or `XXX-123` pattern → use Linear MCP
@@ -23,6 +25,8 @@ Optional flag `--auto` skips the human approval gate after the improved plan.
 4. If **not a feature**, stop here and ask the user whether to continue with a simpler flow (bug / chore don't need adversarial review).
 
 ## Phase 1 — Plan
+
+**Use sonnet model** - complex reasoning required for planning.
 
 Invoke the `architect` subagent with the fetched ticket. Produce `docs/plans/<ticket-slug>.md` following the superpowers `writing-plans` skill format:
 
@@ -67,6 +71,8 @@ Use the superpowers `using-git-worktrees` skill:
 3. From here on, all file edits happen in the worktree — never on the main checkout
 
 ## Phase 6 — Implement
+
+**Model selection:** Use haiku for initial file exploration within each agent, then sonnet for actual code writing.
 
 Dispatch parallel agents (superpowers `dispatching-parallel-agents` skill) in one message:
 

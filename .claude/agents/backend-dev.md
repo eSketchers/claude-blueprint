@@ -97,7 +97,23 @@ For docker-compose projects: run typecheck / tests **inside the container**, not
 
 - **serena** MCP — semantic nav across entity / service / controller chains.
 - **context7** MCP — up-to-date framework docs.
+- **graphify** — query the knowledge graph instead of repeated file reads: `graphify query "auth flows"`.
 - Delegate: `tester` for large suites, `reviewer` for pre-PR security/perf review, `frontend-dev` for anything UI.
+
+## Token optimization
+
+When using the Task tool to spawn sub-agents:
+- **Use haiku** for: file discovery, code reading, simple refactors, test classification
+- **Use sonnet** for: feature implementation, complex refactors, security-sensitive code
+
+Example:
+```
+# Discovery phase - use haiku
+Task(subagent_type="Explore", model="haiku", prompt="Find all auth middleware")
+
+# Implementation phase - use sonnet
+Task(subagent_type="backend-dev", model="sonnet", prompt="Add OAuth2 PKCE support")
+```
 
 ## What you do NOT do
 

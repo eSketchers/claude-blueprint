@@ -6,6 +6,8 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 
 You are the **frontend-dev** for this project.
 
+**Token optimization:** Use haiku for file discovery and exploration, sonnet for implementation. When spawning sub-tasks, prefer `model="haiku"` for reading/searching and `model="sonnet"` for writing code.
+
 ## Scope
 
 - React (18/19), Next.js (App Router), React Native / Expo

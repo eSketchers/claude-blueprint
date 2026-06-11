@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Git post-commit hook — runs after each commit
+#
+# Installation (per project):
+#   cp hooks/post-commit.sample .git/hooks/post-commit
+#   chmod +x .git/hooks/post-commit
+#
+# Or let adopt.sh install it automatically with --install-git-hooks
+
+set -euo pipefail
+
+# Optional: Run graphify indexing after commits (helps reduce token usage)
+# Uncomment to enable automatic indexing:
+#
+# if [[ -x "scripts/graphify-index.sh" ]] || [[ -x "$BLUEPRINT_DIR/scripts/graphify-index.sh" ]]; then
+#   echo "[post-commit] Updating knowledge graph..."
+#   "${BLUEPRINT_DIR:-$(pwd)}/scripts/graphify-index.sh" --quiet || true
+# fi
+
+# Optional: Emit event to dashboard
+# if [[ -x ".claude/hooks/agency-emit.sh" ]]; then
+#   CLAUDE_SESSION_ID="${CLAUDE_SESSION_ID:-manual}" \
+#     .claude/hooks/agency-emit.sh post_commit
+# fi
+
+exit 0

@@ -28,7 +28,21 @@ Reusable Claude Code baseline for all agency projects. Clone into a new project 
 
 # 2. Spin up a new project from this blueprint
 ./scripts/new-project.sh <project-name> <python|node|nextjs|nestjs>
+
+# 3. Optional: Index your codebase for faster queries (saves 40-60% tokens)
+./scripts/graphify-index.sh
 ```
+
+## Token Optimization
+
+The blueprint includes built-in optimizations to reduce token usage by 40-75%:
+
+- **Haiku for exploration** — Simple tasks use the cheaper haiku model automatically
+- **Graphify knowledge graph** — Index once, query many times (60-80% fewer file reads)
+- **Orchestrator budget caps** — Prevent runaway spend with per-ticket and daily limits
+- **Stuck-agent detection** — Halt loops and thrashing automatically
+
+See **[docs/TOKEN-OPTIMIZATION.md](./docs/TOKEN-OPTIMIZATION.md)** for the complete guide.
 
 ## Layout
 

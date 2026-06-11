@@ -55,6 +55,6 @@ This is significantly cheaper than repeated file reads.
 
 ## Troubleshooting
 
-- **"graphify not found"** → Install via `pip install --user graphify`
+- **"graphify not found"** → Install via `pip install --user graphifyy` (note: double-y in package name, CLI is still `graphify`)
 - **"Not in a git repository"** → Run from project root
 - **Index fails** → Check `.graphify/` permissions, try `rm -rf .graphify && /graphify-index --force`

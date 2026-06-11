@@ -37,7 +37,7 @@ log() {
 
 # Check if graphify is installed
 if ! command -v graphify &>/dev/null; then
-  log "graphify not installed. Run: pip install --user graphify"
+  log "graphify not installed. Run: pip install --user graphifyy"
   exit 1
 fi
 

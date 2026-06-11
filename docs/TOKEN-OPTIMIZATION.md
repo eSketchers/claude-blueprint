@@ -57,6 +57,12 @@ Use Explore agent with "quick" thoroughness to find all database migration files
 
 Run graphify indexing after significant changes to build a queryable knowledge graph. This reduces repeated file reads by 60-80%.
 
+**Installation:** The PyPI package is `graphifyy` (double-y), but the CLI command is `graphify`:
+```bash
+pip install --user graphifyy
+```
+
+**Usage:**
 ```bash
 # After merging a large feature
 graphify index .

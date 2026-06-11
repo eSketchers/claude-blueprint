@@ -48,7 +48,7 @@ if ! command -v ast-grep >/dev/null 2>&1; then
 fi
 
 if ! command -v graphify >/dev/null 2>&1; then
-  pip install --user graphify || warn "graphify install failed"
+  pip install --user graphifyy || warn "graphify install failed"
   command -v graphify >/dev/null 2>&1 && graphify install || true
 fi
 

@@ -72,9 +72,30 @@ graphify query "What modules handle authentication?"
 ```
 
 **When to re-index:**
-- After merging 5+ PRs
-- After major refactoring
-- Weekly for active projects
+
+The knowledge graph captures file structure, function/class definitions, and code relationships. Re-index when these change significantly:
+
+**Structural Changes (always re-index):**
+- Adding/removing 10+ files
+- Moving files between directories
+- Renaming modules, classes, or functions used across multiple files
+- Splitting or merging services/modules
+- Changing directory structure
+
+**Code Changes (re-index if significant):**
+- Major refactoring (affecting 20+ files or changing architectural boundaries)
+- Adding new API endpoints/routes (5+ endpoints)
+- Database schema migrations that add/remove entities
+- Adding new feature modules
+- Dependency changes (new libraries that introduce new patterns)
+
+**Time-based (for active projects):**
+- **Daily active projects:** Every 2-3 days or after each major feature
+- **Weekly active projects:** Weekly on Monday morning
+- **Occasional updates:** After each batch of changes
+
+**Automatic threshold:**
+- Script auto-skips if index is < 24 hours old (use `--force` to override)
 
 ## 4. Orchestrator Budget Controls
 

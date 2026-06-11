@@ -14,10 +14,16 @@ Builds a knowledge graph of the codebase that can be queried for faster context 
 - Better understanding of cross-file relationships
 
 **When to run:**
-- After merging 5+ PRs
-- After major refactoring
-- Weekly for active projects
-- When onboarding a new developer
+
+Re-index when the codebase structure changes significantly:
+
+- **Structural:** Adding/removing 10+ files, moving directories, renaming modules
+- **Major features:** New services, API endpoints, database entities
+- **Refactoring:** Changes affecting 20+ files or architectural boundaries
+- **Time-based:** Weekly for active projects, or every 2-3 days for daily development
+- **Onboarding:** When a new developer joins (gives them an up-to-date graph)
+
+The script auto-skips if the index is < 24 hours old.
 
 ## Usage
 

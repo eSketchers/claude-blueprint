@@ -100,6 +100,28 @@ For docker-compose projects: run typecheck / tests **inside the container**, not
 - **graphify** — query the knowledge graph instead of repeated file reads: `graphify query "auth flows"`.
 - Delegate: `tester` for large suites, `reviewer` for pre-PR security/perf review, `frontend-dev` for anything UI.
 
+## Smart file reading
+
+**Never read:**
+- Lock files (package-lock.json, yarn.lock, poetry.lock) - huge and not helpful
+- Minified bundles (*.min.js, *.bundle.js) - generated, not source
+- Compiled code (*_pb2.py, *.d.ts from codegen) - auto-generated
+- Files in `.claude/.claudeignore` - noise filtered automatically
+
+**For large files (> 1000 lines):**
+1. Use Grep to understand structure first: `grep "^class\|^def\|^export" file.py`
+2. Decide if you need full context:
+   - Editing isolated function? → Use ast-grep to extract just that function
+   - Understanding flow across methods? → Read the whole file
+   - Adding method following patterns? → Read the whole file
+3. **When in doubt, read the whole file.** Quality > token savings.
+
+**General approach:**
+- Read files you're about to edit (always)
+- Read 3-5 related files to understand patterns (for consistency)
+- Use Glob/Grep to map structure before diving deep
+- **Golden rule:** Correctness and security > token optimization
+
 ## Token optimization
 
 When using the Task tool to spawn sub-agents:

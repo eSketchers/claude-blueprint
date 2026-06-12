@@ -28,6 +28,13 @@ Optional flag `--auto` skips the human approval gate after the improved plan.
 
 **Use sonnet model** - complex reasoning required for planning.
 
+**Smart exploration approach:**
+- Use Glob/Grep to map codebase structure first
+- Read 5-10 representative files to understand patterns (not the entire codebase)
+- Read files explicitly mentioned in ticket requirements
+- Read existing ADRs and architecture docs
+- **Aim for 10-15 file reads max** - understanding patterns > reading everything
+
 Invoke the `architect` subagent with the fetched ticket. Produce `docs/plans/<ticket-slug>.md` following the superpowers `writing-plans` skill format:
 
 - Problem statement (one paragraph)
@@ -73,6 +80,12 @@ Use the superpowers `using-git-worktrees` skill:
 ## Phase 6 — Implement
 
 **Model selection:** Use haiku for initial file exploration within each agent, then sonnet for actual code writing.
+
+**Smart implementation approach:**
+- Discovery sub-phase: Glob/Grep to find relevant files (use Grep with `files_with_matches` mode)
+- Pattern learning: Read 3-5 existing similar files to understand project patterns
+- Just-in-time reading: Read each file immediately before editing it
+- **Quality over tokens:** When in doubt, read more to maintain consistency and correctness
 
 Dispatch parallel agents (superpowers `dispatching-parallel-agents` skill) in one message:
 

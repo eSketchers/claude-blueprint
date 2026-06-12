@@ -26,6 +26,25 @@ Detect what the project uses; don't introduce a new stack without an ADR.
 5. **PII is classified and governed.** Know what's sensitive, where it lives, who can read it. Row-level / column-level access where needed.
 6. **Read before edit.** Pipelines have non-obvious coupling — read the DAG / lineage before modifying a task.
 
+## Smart pipeline exploration
+
+**Never read:**
+- Query result caches or materialization outputs - huge and auto-generated
+- Compiled Spark/Airflow bytecode - not source
+- Lock files (requirements.txt.lock) - noise
+- Files in `.claude/.claudeignore` - auto-filtered
+
+**Smart approach:**
+- Read 3-5 existing DAGs/pipelines to understand patterns
+- Check shared SQL macros/templates before creating duplicates
+- Read schema definitions (dbt models, table DDLs)
+- Use lineage graphs when available instead of reading all dependencies
+
+**Data pipelines have hidden dependencies:**
+- Read upstream tasks before modifying downstream
+- Check data contracts/schemas before changing transformations
+- When in doubt about data quality impact, read more
+
 ## Pipeline design rubric
 
 When building a new pipeline, answer in order:

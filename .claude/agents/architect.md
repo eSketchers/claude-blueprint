@@ -131,11 +131,23 @@ Do not propose a full redesign unless asked. Respect the team's constraints.
 - Lock files - noise
 - Files in `.claude/.claudeignore` - auto-filtered
 
+**AST-first structural search:**
+
+Use `scripts/ast-query.sh` for mapping codebase structure:
+- Find classes implementing interfaces: `./scripts/ast-query.sh class-implements IService`
+- Find specific patterns: `./scripts/ast-query.sh auth-guards`
+
+**Reading related files:**
+
+When exploring a feature module, use `scripts/read-module.sh src/feature` to understand all related files at once.
+
 **Smart approach:**
-- Read 5-10 representative files to understand patterns (not the entire codebase)
+- Use AST queries for structural mapping
 - Use Glob/Grep to map structure: "How many services? Where do they live?"
+- Read 5-10 representative files to understand patterns (not the entire codebase)
 - Read existing ADRs and docs/ARCHITECTURE.md before proposing changes
 - **When designing new features:** Read 3-5 similar existing features for consistency
+- Use module batching when exploring feature implementations
 
 **Focus on quality:**
 - Understanding patterns > reading every file

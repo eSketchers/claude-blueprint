@@ -34,11 +34,30 @@ Detect what the project uses; don't introduce a new stack without an ADR.
 - Lock files (requirements.txt.lock) - noise
 - Files in `.claude/.claudeignore` - auto-filtered
 
+**Templates available:**
+
+Check `.claude/templates/` before reading examples:
+- **FastAPI:** router, service, schema (for data APIs)
+- **Testing:** pytest fixtures (for pipeline testing)
+
+**AST-first structural search:**
+
+Use `scripts/ast-query.sh` for structural queries:
+- Find Python classes: `./scripts/ast-query.sh python-class ETLPipeline`
+- Find specific functions: `./scripts/ast-query.sh function-name transform_data`
+
+**Reading related files:**
+
+When multiple pipeline files are related, use `scripts/read-module.sh pipelines/user_data` to read the entire pipeline module at once.
+
 **Smart approach:**
+- Check templates before creating new pipeline files
+- Use AST queries for structural exploration
 - Read 3-5 existing DAGs/pipelines to understand patterns
 - Check shared SQL macros/templates before creating duplicates
 - Read schema definitions (dbt models, table DDLs)
 - Use lineage graphs when available instead of reading all dependencies
+- Use module batching for related pipeline files
 
 **Data pipelines have hidden dependencies:**
 - Read upstream tasks before modifying downstream

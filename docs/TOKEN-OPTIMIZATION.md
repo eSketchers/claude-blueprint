@@ -238,12 +238,64 @@ alias token-burn='jq -r ".daily_spend" ~/.claude-agency/registry.json'
 
 ---
 
+## Phase 2: Additional Optimizations (Optional)
+
+Once Phase 1 is stable, consider these advanced strategies:
+
+### 11. Template Library
+
+**Impact:** 2K-5K tokens saved per new file creation
+**Status:** ✅ Templates available in `.claude/templates/`
+
+Agents check `.claude/templates/` before reading example files:
+- **NestJS:** controller, service, module, guard, interceptor
+- **React:** component, form, hook, context
+- **FastAPI:** router, service, schema, dependencies
+- **Testing:** pytest fixtures, jest mocks
+
+Only read existing code when templates don't exist or need project-specific customizations.
+
+### 12. AST-Based Navigation
+
+**Impact:** 60-80% reduction for "find all X" queries
+**Status:** ✅ Available via `scripts/ast-query.sh`
+
+Use AST queries instead of Grep+Read for structural searches:
+```bash
+# Find authentication guards
+./scripts/ast-query.sh auth-guards
+
+# Find specific function
+./scripts/ast-query.sh function-name handleLogin
+
+# Find Python class
+./scripts/ast-query.sh python-class UserService
+```
+
+### 13. Module Batching
+
+**Impact:** 20-30% reduction in multi-file reads
+**Status:** ✅ Available via `scripts/read-module.sh`
+
+Read entire modules at once instead of separate files:
+```bash
+# Read all files in auth module
+./scripts/read-module.sh src/auth
+```
+
+More efficient than separate Read calls, provides better context.
+
+**Phase 2 details:** See `docs/optimization-phases/PHASE-2-PRACTICAL.md`
+
+---
+
 ## Expected Savings
 
 Implementing all recommendations:
 
-- **Quick wins (haiku + graphify):** 40-60% reduction
-- **Full optimization:** 60-75% reduction
+- **Phase 1 (core optimizations):** 70-85% waste elimination
+- **Phase 2 (templates + AST + batching):** Additional 10-20% reduction
+- **Combined total:** 80-90% waste elimination
 - **Orchestrator caps:** Prevents runaway spend (unbounded → bounded)
 
 ## Rollback
@@ -253,4 +305,5 @@ If optimization causes quality issues:
 1. Remove model parameters from Task calls (defaults to sonnet)
 2. Use "medium" or "very thorough" for Explore agent
 3. Increase orchestrator thresholds
-4. Review `~/.claude-agency/agent-logs/` for failures
+4. Stop using templates (agents will read examples as before)
+5. Review `~/.claude-agency/agent-logs/` for failures

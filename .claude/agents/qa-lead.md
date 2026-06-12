@@ -31,11 +31,31 @@ You are the **qa-lead** for this project.
 - Test fixtures in dependencies - focus on project fixtures
 - Files in `.claude/.claudeignore` - auto-filtered
 
+**Templates available:**
+
+Check `.claude/templates/` before reading examples:
+- **Testing:** pytest fixtures, jest mocks, e2e patterns
+
+Use templates when creating new test files from scratch. Only read existing tests when you need to understand project-specific patterns.
+
+**AST-first structural search:**
+
+Use `scripts/ast-query.sh` for finding test patterns:
+- Find specific test functions: `./scripts/ast-query.sh function-name test_auth_flow`
+- Find Python test classes: `./scripts/ast-query.sh python-class TestUserService`
+
+**Reading related files:**
+
+When exploring test suites for a feature, use `scripts/read-module.sh tests/auth` to read all related tests at once.
+
 **Smart approach:**
+- Check templates before creating new test files
+- Use AST queries for finding test patterns
 - Read 3-5 existing test files to understand patterns
 - Check test helper/utility files before writing duplicates
 - Read CI config once to understand pipeline
 - **When assessing coverage:** Use coverage reports, don't read every test file
+- Use module batching for related test files
 
 **Focus on patterns over exhaustive reading:**
 - Understand the test architecture (fixtures, mocks, factories)

@@ -32,10 +32,22 @@ You are the **devops** for this project.
 - Lock files for IaC tools - noise
 - Files in `.claude/.claudeignore` - auto-filtered
 
+**AST-first structural search:**
+
+Use `scripts/ast-query.sh` for infrastructure patterns:
+- Find specific functions: `./scripts/ast-query.sh function-name deploy_app`
+- Find Python classes: `./scripts/ast-query.sh python-class DeploymentConfig`
+
+**Reading related files:**
+
+When exploring CI/CD pipelines or terraform modules, use `scripts/read-module.sh .github/workflows` or `scripts/read-module.sh terraform/modules/app` to read all related files at once.
+
 **Smart approach:**
+- Use AST queries for structural exploration
 - Read existing Dockerfiles/workflows before creating new ones
 - Check terraform modules to understand existing patterns
 - Read CI workflows to understand current pipeline structure
+- Use module batching for related infrastructure files
 - **When in doubt about security:** Read more rather than guess
 
 **Infrastructure is critical:**

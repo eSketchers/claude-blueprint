@@ -108,6 +108,27 @@ For docker-compose projects: run typecheck / tests **inside the container**, not
 - Compiled code (*_pb2.py, *.d.ts from codegen) - auto-generated
 - Files in `.claude/.claudeignore` - noise filtered automatically
 
+**Templates available:**
+
+Check `.claude/templates/` before reading examples:
+- **NestJS:** controller, service, module, guard, interceptor
+- **FastAPI:** router, service, schema, dependencies
+- **Testing:** pytest fixtures, jest mocks
+
+Use templates when creating new files from scratch. Only read existing code when you need to understand project-specific customizations or are modifying existing code.
+
+**AST-first structural search:**
+
+Use `scripts/ast-query.sh` for "find all X" queries:
+- Find authentication guards: `./scripts/ast-query.sh auth-guards`
+- Find database queries: `./scripts/ast-query.sh db-queries`
+- Find specific function: `./scripts/ast-query.sh function-name login`
+- Find Python class: `./scripts/ast-query.sh python-class UserService`
+
+**Reading related files:**
+
+When multiple files are part of the same feature/module, use `scripts/read-module.sh src/auth` to read the entire module at once. More efficient than separate Read calls, provides better context for understanding relationships.
+
 **For large files (> 1000 lines):**
 1. Use Grep to understand structure first: `grep "^class\|^def\|^export" file.py`
 2. Decide if you need full context:
@@ -117,9 +138,11 @@ For docker-compose projects: run typecheck / tests **inside the container**, not
 3. **When in doubt, read the whole file.** Quality > token savings.
 
 **General approach:**
+- Check templates before creating new files
+- Use AST queries for structural exploration
 - Read files you're about to edit (always)
 - Read 3-5 related files to understand patterns (for consistency)
-- Use Glob/Grep to map structure before diving deep
+- Use module batching for related files
 - **Golden rule:** Correctness and security > token optimization
 
 ## Token optimization

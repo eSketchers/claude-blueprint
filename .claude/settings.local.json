@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./scripts/read-module.sh:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -9,13 +9,14 @@
 
 set -euo pipefail
 
-# Optional: Run graphify indexing after commits (helps reduce token usage)
-# Uncomment to enable automatic indexing:
+# Run graphify indexing after commits (helps reduce token usage)
+# Graphify uses SHA256 caching - only changed files are re-processed.
+# This typically takes 5-15 seconds for small commits.
 #
-# if [[ -x "scripts/graphify-index.sh" ]] || [[ -x "$BLUEPRINT_DIR/scripts/graphify-index.sh" ]]; then
-#   echo "[post-commit] Updating knowledge graph..."
-#   "${BLUEPRINT_DIR:-$(pwd)}/scripts/graphify-index.sh" --quiet || true
-# fi
+if [[ -x "scripts/graphify-index.sh" ]] || [[ -x "$BLUEPRINT_DIR/scripts/graphify-index.sh" ]]; then
+  echo "[post-commit] Updating knowledge graph (incremental)..."
+  "${BLUEPRINT_DIR:-$(pwd)}/scripts/graphify-index.sh" --quiet || true
+fi
 
 # Optional: Emit event to dashboard
 # if [[ -x ".claude/hooks/agency-emit.sh" ]]; then

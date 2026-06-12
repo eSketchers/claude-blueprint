@@ -12,6 +12,7 @@ Builds a knowledge graph of the codebase that can be queried for faster context 
 - Reduces file reads by 60-80% in subsequent sessions
 - Faster agent exploration
 - Better understanding of cross-file relationships
+- **Incremental updates:** Only changed files are re-processed (SHA256 caching)
 
 **When to run:**
 

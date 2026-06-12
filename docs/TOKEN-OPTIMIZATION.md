@@ -57,6 +57,11 @@ Use Explore agent with "quick" thoroughness to find all database migration files
 
 Run graphify indexing after significant changes to build a queryable knowledge graph. This reduces repeated file reads by 60-80%.
 
+**Key Feature: Incremental Updates (Built-in)**
+- Graphify uses SHA256 caching - only changed files are re-processed
+- Re-indexing 5 changed files: ~5-15 seconds (vs 2-5 minutes for full re-index)
+- Makes post-commit hooks practical for keeping graph fresh automatically
+
 **Installation:** The PyPI package is `graphifyy` (double-y), but the CLI command is `graphify`:
 ```bash
 pip install --user graphifyy
@@ -64,11 +69,20 @@ pip install --user graphifyy
 
 **Usage:**
 ```bash
-# After merging a large feature
+# After merging a large feature (incremental automatically)
 graphify index .
 
 # Query the graph instead of reading files
 graphify query "What modules handle authentication?"
+```
+
+**Automatic Updates (Recommended):**
+```bash
+# Install post-commit hook for automatic incremental updates
+cp hooks/post-commit.sample .git/hooks/post-commit
+chmod +x .git/hooks/post-commit
+
+# Now graph updates automatically after each commit (5-15s overhead)
 ```
 
 **When to re-index:**

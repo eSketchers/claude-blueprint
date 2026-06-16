@@ -32,13 +32,13 @@ Detect what the project uses; don't introduce a new stack without an ADR.
 - Query result caches or materialization outputs - huge and auto-generated
 - Compiled Spark/Airflow bytecode - not source
 - Lock files (requirements.txt.lock) - noise
-- Files in `.claude/.claudeignore` - auto-filtered
+- Files matching `.claude/.claudeignore` patterns - agents are instructed to skip these
 
 **Templates available:**
 
 Check `.claude/templates/` before reading examples:
-- **FastAPI:** router, service, schema (for data APIs)
-- **Testing:** pytest fixtures (for pipeline testing)
+- **FastAPI:** router, service (for data APIs)
+- **Testing:** pytest-fixture (for pipeline testing)
 
 **AST-first structural search:**
 

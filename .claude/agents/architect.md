@@ -129,7 +129,7 @@ Do not propose a full redesign unless asked. Respect the team's constraints.
 - Dependencies (node_modules/, vendor/) - not your codebase
 - Build outputs - generated, not source
 - Lock files - noise
-- Files in `.claude/.claudeignore` - auto-filtered
+- Files matching `.claude/.claudeignore` patterns - agents are instructed to skip these
 
 **AST-first structural search:**
 

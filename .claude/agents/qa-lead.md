@@ -29,12 +29,12 @@ You are the **qa-lead** for this project.
 - Test snapshots (*.snap, *.snapshot) - too verbose
 - Coverage reports (htmlcov/, coverage/) - auto-generated
 - Test fixtures in dependencies - focus on project fixtures
-- Files in `.claude/.claudeignore` - auto-filtered
+- Files matching `.claude/.claudeignore` patterns - agents are instructed to skip these
 
 **Templates available:**
 
 Check `.claude/templates/` before reading examples:
-- **Testing:** pytest fixtures, jest mocks, e2e patterns
+- **Testing:** pytest-fixture, jest-mock
 
 Use templates when creating new test files from scratch. Only read existing tests when you need to understand project-specific patterns.
 

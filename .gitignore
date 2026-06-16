@@ -2,6 +2,3 @@
 
 # A dev may accidentally nest this blueprint inside another project.
 .agency/
-
-# Claude Flow runtime files
-.claude-flow/

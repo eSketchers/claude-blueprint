@@ -30,7 +30,7 @@ You are the **devops** for this project.
 - Terraform state files (.tfstate) - auto-generated, huge
 - Kubernetes generated manifests from Helm - read the chart templates instead
 - Lock files for IaC tools - noise
-- Files in `.claude/.claudeignore` - auto-filtered
+- Files matching `.claude/.claudeignore` patterns - agents are instructed to skip these
 
 **AST-first structural search:**
 

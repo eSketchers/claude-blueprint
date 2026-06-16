@@ -13,7 +13,7 @@ set -euo pipefail
 # Graphify uses SHA256 caching - only changed files are re-processed.
 # This typically takes 5-15 seconds for small commits.
 #
-if [[ -x "scripts/graphify-index.sh" ]] || [[ -x "$BLUEPRINT_DIR/scripts/graphify-index.sh" ]]; then
+if [[ -x "scripts/graphify-index.sh" ]] || [[ -x "${BLUEPRINT_DIR:-}/scripts/graphify-index.sh" ]]; then
   echo "[post-commit] Updating knowledge graph (incremental)..."
   "${BLUEPRINT_DIR:-$(pwd)}/scripts/graphify-index.sh" --quiet || true
 fi

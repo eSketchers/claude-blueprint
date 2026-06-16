@@ -106,14 +106,14 @@ For docker-compose projects: run typecheck / tests **inside the container**, not
 - Lock files (package-lock.json, yarn.lock, poetry.lock) - huge and not helpful
 - Minified bundles (*.min.js, *.bundle.js) - generated, not source
 - Compiled code (*_pb2.py, *.d.ts from codegen) - auto-generated
-- Files in `.claude/.claudeignore` - noise filtered automatically
+- Files matching `.claude/.claudeignore` patterns - agents are instructed to skip these
 
 **Templates available:**
 
 Check `.claude/templates/` before reading examples:
-- **NestJS:** controller, service, module, guard, interceptor
-- **FastAPI:** router, service, schema, dependencies
-- **Testing:** pytest fixtures, jest mocks
+- **NestJS:** controller, service
+- **FastAPI:** router, service
+- **Testing:** pytest-fixture, jest-mock
 
 Use templates when creating new files from scratch. Only read existing code when you need to understand project-specific customizations or are modifying existing code.
 

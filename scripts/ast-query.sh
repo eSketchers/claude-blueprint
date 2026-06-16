@@ -27,17 +27,18 @@ fi
 case "$PATTERN_TYPE" in
   auth-guards)
     # Find all endpoints with authentication guards
-    ast-grep --pattern '@UseGuards($$$)' 'src/**/*.ts'
+    # Search from current directory, not hardcoded src/
+    ast-grep --pattern '@UseGuards($$$)' . || true
     ;;
 
   db-queries)
     # Find all database queries
-    ast-grep --pattern 'await $REPO.$METHOD($$$)' 'src/**/*.ts'
+    ast-grep --pattern 'await $REPO.$METHOD($$$)' . || true
     ;;
 
   react-state)
     # Find all React components with state
-    ast-grep --pattern 'useState($$$)' 'src/**/*.tsx'
+    ast-grep --pattern 'useState($$$)' . || true
     ;;
 
   class-implements)
@@ -46,7 +47,7 @@ case "$PATTERN_TYPE" in
       echo "Usage: ast-query.sh class-implements <InterfaceName>" >&2
       exit 1
     fi
-    ast-grep --pattern "class \$CLASS implements $PATTERN_ARG" 'src/**/*.ts'
+    ast-grep --pattern "class \$CLASS implements $PATTERN_ARG" . || true
     ;;
 
   function-name)
@@ -55,8 +56,9 @@ case "$PATTERN_TYPE" in
       echo "Usage: ast-query.sh function-name <functionName>" >&2
       exit 1
     fi
-    ast-grep --pattern "function $PATTERN_ARG(\$\$\$)" '**/*.{ts,js,tsx,jsx}'
-    ast-grep --pattern "const $PATTERN_ARG = (\$\$\$) =>" '**/*.{ts,js,tsx,jsx}'
+    # Search both patterns; || true prevents early exit on no match
+    ast-grep --pattern "function $PATTERN_ARG(\$\$\$)" . || true
+    ast-grep --pattern "const $PATTERN_ARG = (\$\$\$) =>" . || true
     ;;
 
   python-class)
@@ -65,7 +67,7 @@ case "$PATTERN_TYPE" in
       echo "Usage: ast-query.sh python-class <ClassName>" >&2
       exit 1
     fi
-    ast-grep --pattern "class $PATTERN_ARG:" '**/*.py'
+    ast-grep --pattern "class $PATTERN_ARG:" . || true
     ;;
 
   *)

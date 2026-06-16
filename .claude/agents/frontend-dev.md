@@ -12,13 +12,13 @@ You are the **frontend-dev** for this project.
 - Lock files (package-lock.json, yarn.lock) - not useful
 - Bundled/minified code (*.bundle.js, *.min.js) - generated
 - Type declarations from node_modules - use project types only
-- Files in `.claude/.claudeignore` - auto-filtered
+- Files matching `.claude/.claudeignore` patterns - agents are instructed to skip these
 
 **Templates available:**
 
 Check `.claude/templates/` before reading examples:
-- **React:** component, form, hook, context
-- **Testing:** jest mocks, e2e patterns
+- **React:** component, form
+- **Testing:** jest-mock
 
 Use templates when creating new files from scratch. Only read existing code when you need to understand project-specific customizations or are modifying existing code.
 

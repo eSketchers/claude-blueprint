@@ -132,39 +132,13 @@ The knowledge graph captures file structure, function/class definitions, and cod
 **Automatic threshold:**
 - Script auto-skips if index is < 24 hours old (use `--force` to override)
 
-## 4. Orchestrator Budget Controls
-
-Configure hard caps in `config/orchestrator.json`:
-
-```json
-{
-  "budget": {
-    "per_ticket_usd_cap": 2.0,        // Halt ticket when exceeded
-    "daily_usd_cap": 30.0,            // Stop new spawns
-    "cost_per_event_usd": 0.015,      // Tune based on observed cost
-    "warn_at_daily_percent": 85
-  },
-  "stuck": {
-    "tool_loop_threshold": 3,         // Same file edited 3x → halt
-    "thrashing_window": 40,           // 40 events, no changes → halt
-    "idle_timeout_ms": 480000         // 8 min no activity → halt
-  }
-}
-```
-
-**Calibration:**
-1. Run with `dry_run: false` on 2-3 representative tickets
-2. Check `~/.claude-agency/registry.json` for actual spend
-3. Adjust `cost_per_event_usd` to match reality
-4. Lower thresholds by 20-30% for stricter control
-
-## 5. Parallel Agent Strategy
+## 4. Parallel Agent Strategy
 
 The `/ticket` workflow already spawns specialized agents in parallel. Each has isolated context = more efficient than one agent with all contexts.
 
 **Best practice:** Let the workflow handle parallelization automatically. Don't try to coordinate agents manually.
 
-## 6. File Operation Hygiene
+## 5. File Operation Hygiene
 
 **Already optimized in the blueprint**, but for custom agents:
 
@@ -178,13 +152,13 @@ The `/ticket` workflow already spawns specialized agents in parallel. Each has i
 - Read the same file multiple times
 - Use `Read` without `limit` on huge files
 
-## 7. Pre-commit Hooks Reduce Rework
+## 6. Pre-commit Hooks Reduce Rework
 
 The blueprint's PostToolUse hooks catch lint/format issues immediately, preventing costly fix-refix loops.
 
 **Already enabled** - no action needed.
 
-## 8. Dashboard Monitoring
+## 7. Dashboard Monitoring
 
 Use the dashboard to spot runaway agents:
 
@@ -200,7 +174,7 @@ node "$BLUEPRINT_DIR/dashboard/server.mjs"
 
 **Action:** Kill the session, review why it got stuck, tune thresholds.
 
-## 9. Agent-Specific Tips
+## 8. Agent-Specific Tips
 
 ### Architect
 - Use haiku for initial codebase exploration
@@ -217,7 +191,7 @@ node "$BLUEPRINT_DIR/dashboard/server.mjs"
 ### Code-reviewer
 - Use sonnet (always) - quality matters more than cost here
 
-## 10. Cost Tracking
+## 9. Cost Tracking
 
 Monitor actual spend:
 
@@ -248,10 +222,10 @@ Once Phase 1 is stable, consider these advanced strategies:
 **Status:** ✅ Templates available in `.claude/templates/`
 
 Agents check `.claude/templates/` before reading example files:
-- **NestJS:** controller, service, module, guard, interceptor
-- **React:** component, form, hook, context
-- **FastAPI:** router, service, schema, dependencies
-- **Testing:** pytest fixtures, jest mocks
+- **NestJS:** controller, service
+- **React:** component, form
+- **FastAPI:** router, service
+- **Testing:** pytest-fixture, jest-mock
 
 Only read existing code when templates don't exist or need project-specific customizations.
 
@@ -289,14 +263,28 @@ More efficient than separate Read calls, provides better context.
 
 ---
 
-## Expected Savings
+## Expected Savings (Projections)
+
+**These are theoretical projections based on strategy analysis, not measured results.**
 
 Implementing all recommendations:
 
-- **Phase 1 (core optimizations):** 70-85% waste elimination
+- **Phase 1 (core optimizations):** Targets 70-85% waste elimination
+  - `.claudeignore` filtering: 80-95% noise reduction
+  - Smart reading patterns: 50-70% reduction in unnecessary file reads
+  - Graphify indexing: 60-80% fewer repeated file reads
+
 - **Phase 2 (templates + AST + batching):** Additional 10-20% reduction
-- **Combined total:** 80-90% waste elimination
-- **Orchestrator caps:** Prevents runaway spend (unbounded → bounded)
+  - Templates: 2K-5K tokens per new file (when applicable)
+  - AST navigation: 60-80% reduction for structural queries
+  - Module batching: 20-30% savings on related file reads
+
+**Actual reduction depends on:**
+- Codebase structure (how much noise vs signal)
+- Task types (exploration vs implementation)
+- Agent adherence to guidance (prompt-based, not enforced)
+
+**Combined target:** 70-90% reduction in wasted context (not total context)
 
 ## Rollback
 

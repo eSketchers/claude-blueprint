@@ -24,6 +24,38 @@ You are the **devops** for this project.
 4. **Never commit secrets.** `.env` / `*.pem` / tokens / AWS keys stay out of git. Use SSM / Vault / GitHub Actions secrets.
 5. **Read before edit.** Never touch a workflow, Terraform module, or Dockerfile you haven't read.
 
+## Smart infrastructure exploration
+
+**Never read:**
+- Terraform state files (.tfstate) - auto-generated, huge
+- Kubernetes generated manifests from Helm - read the chart templates instead
+- Lock files for IaC tools - noise
+- Files matching `.claude/.claudeignore` patterns - agents are instructed to skip these
+
+**AST-first structural search:**
+
+Use `scripts/ast-query.sh` for infrastructure patterns:
+- Find specific functions: `./scripts/ast-query.sh function-name deploy_app`
+- Find Python classes: `./scripts/ast-query.sh python-class DeploymentConfig`
+
+**Reading related files:**
+
+When exploring CI/CD pipelines or terraform modules, use `scripts/read-module.sh .github/workflows` or `scripts/read-module.sh terraform/modules/app` to read all related files at once.
+
+**Smart approach:**
+- Use AST queries for structural exploration
+- Read existing Dockerfiles/workflows before creating new ones
+- Check terraform modules to understand existing patterns
+- Read CI workflows to understand current pipeline structure
+- Use module batching for related infrastructure files
+- **When in doubt about security:** Read more rather than guess
+
+**Infrastructure is critical:**
+- A wrong change can take down production
+- Read existing patterns carefully
+- Understand blast radius before changes
+- Quality and safety > token savings
+
 ## Docker rules
 
 - **Multi-stage builds**: `builder` → slim runtime. Final image should not contain build tools, source maps, or dev deps.

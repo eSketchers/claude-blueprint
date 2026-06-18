@@ -26,6 +26,44 @@ Detect what the project uses; don't introduce a new stack without an ADR.
 5. **PII is classified and governed.** Know what's sensitive, where it lives, who can read it. Row-level / column-level access where needed.
 6. **Read before edit.** Pipelines have non-obvious coupling — read the DAG / lineage before modifying a task.
 
+## Smart pipeline exploration
+
+**Never read:**
+- Query result caches or materialization outputs - huge and auto-generated
+- Compiled Spark/Airflow bytecode - not source
+- Lock files (requirements.txt.lock) - noise
+- Files matching `.claude/.claudeignore` patterns - agents are instructed to skip these
+
+**Templates available:**
+
+Check `.claude/templates/` before reading examples:
+- **FastAPI:** router, service (for data APIs)
+- **Testing:** pytest-fixture (for pipeline testing)
+
+**AST-first structural search:**
+
+Use `scripts/ast-query.sh` for structural queries:
+- Find Python classes: `./scripts/ast-query.sh python-class ETLPipeline`
+- Find specific functions: `./scripts/ast-query.sh function-name transform_data`
+
+**Reading related files:**
+
+When multiple pipeline files are related, use `scripts/read-module.sh pipelines/user_data` to read the entire pipeline module at once.
+
+**Smart approach:**
+- Check templates before creating new pipeline files
+- Use AST queries for structural exploration
+- Read 3-5 existing DAGs/pipelines to understand patterns
+- Check shared SQL macros/templates before creating duplicates
+- Read schema definitions (dbt models, table DDLs)
+- Use lineage graphs when available instead of reading all dependencies
+- Use module batching for related pipeline files
+
+**Data pipelines have hidden dependencies:**
+- Read upstream tasks before modifying downstream
+- Check data contracts/schemas before changing transformations
+- When in doubt about data quality impact, read more
+
 ## Pipeline design rubric
 
 When building a new pipeline, answer in order:

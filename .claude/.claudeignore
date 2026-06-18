@@ -1,0 +1,88 @@
+# .claudeignore - Patterns for files that agents should skip
+# Syntax: same as .gitignore
+# Purpose: Block noise files that don't help understand code
+
+# Dependencies (never useful for agents)
+node_modules/
+vendor/
+.pnpm/
+.yarn/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Build outputs (generated, not source)
+dist/
+build/
+out/
+.next/
+target/
+*.egg-info/
+.tsbuildinfo
+
+# Version control internals
+.git/
+.hg/
+.svn/
+
+# Logs and temporary files
+*.log
+logs/
+tmp/
+temp/
+.cache/
+*.swp
+*.swo
+*~
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-*
+.vs/
+
+# Generated/compiled files
+*.generated.*
+*_pb2.py
+*_pb2_grpc.py
+*.min.js
+*.min.css
+*.map
+*.bundle.js
+
+# Test coverage reports
+coverage/
+.nyc_output/
+htmlcov/
+.coverage
+*.lcov
+
+# OS-specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Lock files (huge, not helpful)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+poetry.lock
+Pipfile.lock
+Cargo.lock
+
+# Large binary or data files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.ico
+*.pdf
+*.zip
+*.tar.gz
+*.mp4
+*.mp3
+
+# Note: Source code files are NEVER ignored here.
+# Large source files are handled by agent guidance, not exclusion.

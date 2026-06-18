@@ -121,9 +121,43 @@ When reviewing an existing design, output:
 
 Do not propose a full redesign unless asked. Respect the team's constraints.
 
+## Smart exploration
+
+**Your job is understanding, not implementing** - read enough to make informed decisions.
+
+**Never read:**
+- Dependencies (node_modules/, vendor/) - not your codebase
+- Build outputs - generated, not source
+- Lock files - noise
+- Files matching `.claude/.claudeignore` patterns - agents are instructed to skip these
+
+**AST-first structural search:**
+
+Use `scripts/ast-query.sh` for mapping codebase structure:
+- Find classes implementing interfaces: `./scripts/ast-query.sh class-implements IService`
+- Find specific patterns: `./scripts/ast-query.sh auth-guards`
+
+**Reading related files:**
+
+When exploring a feature module, use `scripts/read-module.sh src/feature` to understand all related files at once.
+
+**Smart approach:**
+- Use AST queries for structural mapping
+- Use Glob/Grep to map structure: "How many services? Where do they live?"
+- Read 5-10 representative files to understand patterns (not the entire codebase)
+- Read existing ADRs and docs/ARCHITECTURE.md before proposing changes
+- **When designing new features:** Read 3-5 similar existing features for consistency
+- Use module batching when exploring feature implementations
+
+**Focus on quality:**
+- Understanding patterns > reading every file
+- Read enough to make informed tradeoffs
+- When uncertain about existing approach, read more rather than guess
+
 ## Tooling
 
 - **serena** MCP — understand the existing structure before proposing changes.
 - **context7** MCP — current docs for frameworks / cloud services being considered.
 - **memory** MCP — record decisions so future sessions pick them up.
+- **graphify** — query the knowledge graph for high-level structure understanding.
 - Delegate: `coder` / `backend-dev` / `frontend-dev` for implementation; `devops` for infra; `reviewer` + `qa-lead` for review.

@@ -1,0 +1,121 @@
+{
+  "$schema": "https://claude.ai/schemas/settings.json",
+  "profiles": {
+    "minimal": {
+      "description": "Minimal context - exploration, questions, planning",
+      "mcpServers": {
+        "sequential-thinking": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+        },
+        "memory": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-memory"]
+        },
+        "serena": {
+          "command": "serena"
+        }
+      }
+    },
+    "frontend": {
+      "description": "Frontend development - UI, components, E2E tests",
+      "mcpServers": {
+        "sequential-thinking": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+        },
+        "memory": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-memory"]
+        },
+        "serena": {
+          "command": "serena"
+        },
+        "context7": {
+          "command": "npx",
+          "args": ["-y", "@upstash/context7"]
+        },
+        "playwright": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-playwright"]
+        }
+      }
+    },
+    "backend": {
+      "description": "Backend development - APIs, databases, services",
+      "mcpServers": {
+        "sequential-thinking": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+        },
+        "memory": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-memory"]
+        },
+        "serena": {
+          "command": "serena"
+        },
+        "context7": {
+          "command": "npx",
+          "args": ["-y", "@upstash/context7"]
+        }
+      }
+    },
+    "fullstack": {
+      "description": "Full-stack work - features touching both FE and BE",
+      "mcpServers": {
+        "sequential-thinking": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+        },
+        "memory": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-memory"]
+        },
+        "serena": {
+          "command": "serena"
+        },
+        "context7": {
+          "command": "npx",
+          "args": ["-y", "@upstash/context7"]
+        },
+        "playwright": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-playwright"]
+        },
+        "github": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-github"]
+        }
+      }
+    },
+    "ticket": {
+      "description": "Full /ticket workflow - planning → implementation → PR",
+      "mcpServers": {
+        "sequential-thinking": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+        },
+        "memory": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-memory"]
+        },
+        "serena": {
+          "command": "serena"
+        },
+        "context7": {
+          "command": "npx",
+          "args": ["-y", "@upstash/context7"]
+        },
+        "playwright": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-playwright"]
+        },
+        "github": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-github"]
+        }
+      }
+    }
+  }
+}

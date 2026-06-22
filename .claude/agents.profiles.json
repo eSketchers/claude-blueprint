@@ -1,0 +1,77 @@
+{
+  "$schema": "agent-profiles",
+  "description": "Define which agents are available per profile to reduce context overhead",
+  "profiles": {
+    "minimal": {
+      "description": "Exploration, planning, questions - no implementation agents",
+      "agents": [
+        "architect"
+      ],
+      "comment": "Only architect for planning/ADRs. No implementation agents to save context."
+    },
+    "frontend": {
+      "description": "Frontend development - UI, components, E2E tests",
+      "agents": [
+        "architect",
+        "frontend-dev",
+        "qa-lead"
+      ],
+      "comment": "Frontend specialist + architect for planning + qa-lead for test strategy"
+    },
+    "backend": {
+      "description": "Backend development - APIs, databases, services",
+      "agents": [
+        "architect",
+        "backend-dev",
+        "qa-lead"
+      ],
+      "comment": "Backend specialist + architect for planning + qa-lead for test strategy"
+    },
+    "fullstack": {
+      "description": "Full-stack work - features touching both FE and BE",
+      "agents": [
+        "architect",
+        "frontend-dev",
+        "backend-dev",
+        "qa-lead"
+      ],
+      "comment": "Both implementation specialists + planning/testing support"
+    },
+    "devops": {
+      "description": "Infrastructure, CI/CD, deployments",
+      "agents": [
+        "architect",
+        "devops",
+        "qa-lead"
+      ],
+      "comment": "DevOps specialist + architect for infrastructure design"
+    },
+    "data": {
+      "description": "Data pipelines, warehousing, analytics",
+      "agents": [
+        "architect",
+        "data-engineer",
+        "backend-dev",
+        "qa-lead"
+      ],
+      "comment": "Data engineering + backend for API integration"
+    },
+    "ticket": {
+      "description": "Full /ticket workflow - all agents available",
+      "agents": [
+        "architect",
+        "frontend-dev",
+        "backend-dev",
+        "qa-lead",
+        "devops",
+        "data-engineer"
+      ],
+      "comment": "All specialists available for autonomous workflow"
+    }
+  },
+  "notes": {
+    "implementation": "Claude Code loads all .md files from .claude/agents/ by default. To enable profile-based filtering, use the agent-filter script to create/remove symlinks.",
+    "impact": "Each agent adds ~50-60 tokens (just metadata). With 6 agents, total overhead is ~320-360 tokens. Marginal savings but helps with mental model and prevents accidental misuse.",
+    "alternative": "Keep all agents loaded (current state) but document conventions (e.g., 'only invoke frontend-dev if profile is frontend or ticket')"
+  }
+}

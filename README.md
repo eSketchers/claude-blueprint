@@ -29,6 +29,12 @@ Reusable Claude Code baseline for all agency projects. Clone into a new project 
 # 2. Spin up a new project from this blueprint
 ./scripts/new-project.sh <project-name> <python|node|nextjs|nestjs>
 
+# OR adopt into existing project (supports monorepos!)
+cd ~/work/my-project
+"$BLUEPRINT_DIR/scripts/adopt.sh" --framework python        # Single framework
+"$BLUEPRINT_DIR/scripts/adopt.sh" --frameworks "python,nextjs"  # Monorepo
+"$BLUEPRINT_DIR/scripts/adopt.sh" --detect                  # Auto-detect
+
 # 3. Optional: Index your codebase for faster queries
 ./scripts/graphify-index.sh
 ```

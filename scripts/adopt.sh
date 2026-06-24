@@ -121,7 +121,8 @@ detect_frameworks() {
   # Helper to check if already detected
   has_framework() {
     local fw="$1"
-    for f in "${detected[@]}"; do
+    local f
+    for f in "${detected[@]+"${detected[@]}"}"; do
       [[ "$f" == "$fw" ]] && return 0
     done
     return 1
@@ -167,12 +168,20 @@ detect_frameworks() {
     fi
   done
 
-  printf '%s\n' "${detected[@]}"
+  # Print detected frameworks (handle empty array safely)
+  if [[ ${#detected[@]} -gt 0 ]]; then
+    printf '%s\n' "${detected[@]}"
+  fi
 }
 
 # Auto-detect if requested
 if [[ $DETECT -eq 1 ]]; then
-  mapfile -t FRAMEWORKS < <(detect_frameworks "$PROJECT_ROOT")
+  # Use read loop instead of mapfile for broader shell compatibility
+  FRAMEWORKS=()
+  while IFS= read -r fw; do
+    [[ -n "$fw" ]] && FRAMEWORKS+=("$fw")
+  done < <(detect_frameworks "$PROJECT_ROOT")
+
   if [[ ${#FRAMEWORKS[@]} -eq 0 ]]; then
     die "Auto-detection found no frameworks. Use --framework or --frameworks to specify manually."
   fi

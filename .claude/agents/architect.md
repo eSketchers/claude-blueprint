@@ -154,6 +154,151 @@ When exploring a feature module, use `scripts/read-module.sh src/feature` to und
 - Read enough to make informed tradeoffs
 - When uncertain about existing approach, read more rather than guess
 
+## Profile & Skill Detection (CRITICAL)
+
+**When planning any feature/ticket, determine required tools BEFORE writing the plan.**
+
+### 1. Analyze Requirements
+
+From ticket + codebase exploration, identify what domains are involved:
+
+```yaml
+requirements_analysis:
+  backend_work:
+    present: true/false
+    details: "API endpoints, database, services, migrations"
+
+  frontend_work:
+    present: true/false
+    details: "UI components, forms, styling, client state"
+
+  infrastructure_work:
+    present: true/false
+    details: "Docker, CI/CD, deployment, config"
+
+  data_engineering_work:
+    present: true/false
+    details: "Pipelines, ETL, warehousing, streaming"
+
+  e2e_testing_needed:
+    present: true/false
+    details: "Browser automation, user flows"
+
+  pr_creation_needed:
+    present: true/false
+    details: "Will need to create GitHub PR"
+```
+
+### 2. Determine Required Tools
+
+Based on analysis:
+
+```yaml
+required_tools:
+  mcps:
+    - serena: always  # Code search
+    - context7: if backend_work OR frontend_work
+    - playwright: if e2e_testing_needed
+    - github: if pr_creation_needed
+
+  agents:
+    - architect: always  # You
+    - backend-dev: if backend_work
+    - frontend-dev: if frontend_work
+    - devops: if infrastructure_work
+    - data-engineer: if data_engineering_work
+    - qa-lead: if e2e_testing_needed OR complex_testing
+```
+
+### 3. Check Current Profile
+
+Run this command to see what MCPs are currently loaded:
+
+```bash
+jq -r '.mcpServers | keys[]' .claude/settings.json
+```
+
+Count the MCPs:
+- **3 MCPs** = minimal profile (serena, memory, sequential-thinking)
+- **4 MCPs** = backend profile (+context7)
+- **5 MCPs** = frontend profile (+context7, playwright)
+- **6 MCPs** = ticket/fullstack profile (all)
+
+### 4. Determine Recommended Profile
+
+Logic:
+
+```
+if only backend_work:
+  recommended = "backend"
+elif only frontend_work:
+  recommended = "frontend"
+elif backend_work AND frontend_work:
+  recommended = "fullstack"
+elif (backend_work OR frontend_work) AND infrastructure_work:
+  recommended = "ticket"
+elif infrastructure_work only:
+  recommended = "devops"
+elif data_engineering_work:
+  recommended = "data"
+else:
+  recommended = "minimal"
+```
+
+### 5. Compare Current vs Required
+
+If current profile is insufficient, STOP and output:
+
+```markdown
+⚠️ PROFILE INSUFFICIENT FOR THIS TICKET
+
+## Analysis
+**Backend work:** <yes/no> - <details>
+**Frontend work:** <yes/no> - <details>
+**Infrastructure:** <yes/no> - <details>
+**E2E testing:** <yes/no> - <details>
+
+## Required Tools
+**MCPs needed:** <list>
+**Agents needed:** <list>
+
+## Current Profile
+**Active MCPs:** <list from jq command>
+**Profile detected:** <minimal/frontend/backend/ticket>
+
+## Recommended Profile
+**Profile:** <recommended-profile>
+
+## Action Required
+Exit this session and run:
+
+```bash
+./scripts/switch-profile-full.sh <recommended-profile>
+claude
+/ticket <url>  # Re-run the ticket command
+```
+
+**Why:** The current profile lacks the tools needed for this ticket. Running with insufficient tools will cause failures in Phase 6 (implementation) or Phase 7 (testing).
+
+---
+
+**🛑 STOPPING HERE - Do not proceed with planning until profile is upgraded.**
+```
+
+If current profile is SUFFICIENT, proceed silently with planning (no need to mention profile).
+
+### 6. Document in Plan
+
+In the plan's "Files to change / add" section, add a note:
+
+```markdown
+## Tools Required
+- MCPs: <list of MCPs needed>
+- Agents: <list of agents that will be dispatched>
+```
+
+This helps reviewers understand the scope.
+
 ## Tooling
 
 - **serena** MCP — understand the existing structure before proposing changes.

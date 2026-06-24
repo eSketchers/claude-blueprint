@@ -48,7 +48,21 @@ The blueprint includes built-in optimizations targeting 70-90% reduction in wast
 - **AST navigation** — Structural search without reading full files
 - **Module batching** — Read related files together efficiently
 
-See **[docs/TOKEN-OPTIMIZATION.md](./docs/TOKEN-OPTIMIZATION.md)** for the complete guide.
+**Phase 3 (Dynamic Context):**
+- **Profile-based MCP loading** — Activate only needed MCPs per task (30-60% savings)
+- **Conditional agent dispatch** — Load agents only when plan requires them (built-in)
+
+```bash
+# Switch to minimal profile for exploration
+./scripts/switch-profile.sh minimal
+claude  # Start new session
+
+# Switch to frontend profile before UI work
+./scripts/switch-profile.sh frontend
+claude  # Playwright + context7 loaded, others excluded
+```
+
+See **[docs/TOKEN-OPTIMIZATION.md](./docs/TOKEN-OPTIMIZATION.md)** and **[docs/DYNAMIC-CONTEXT-OPTIMIZATION.md](./docs/DYNAMIC-CONTEXT-OPTIMIZATION.md)** for complete guides.
 
 **Note:** Savings projections are based on theoretical analysis. Actual reduction depends on codebase structure and task types.
 

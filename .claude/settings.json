@@ -36,36 +36,135 @@
   },
   "hooks": {
     "SessionStart": [
-      { "hooks": [{ "type": "command", "command": ".claude/hooks/agency-emit.sh session_start" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/agency-emit.sh session_start"
+          }
+        ]
+      }
     ],
     "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": ".claude/hooks/detect-ticket.sh" }] },
-      { "hooks": [{ "type": "command", "command": ".claude/hooks/agency-emit.sh prompt_submit" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/detect-ticket.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/agency-emit.sh prompt_submit"
+          }
+        ]
+      }
     ],
     "PreToolUse": [
-      { "hooks": [{ "type": "command", "command": ".claude/hooks/agency-emit.sh pre_tool" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/agency-emit.sh pre_tool"
+          }
+        ]
+      }
     ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "pre-commit run --files \"$CLAUDE_TOOL_FILE_PATH\" 2>/dev/null || true" }
+          {
+            "type": "command",
+            "command": "pre-commit run --files \"$CLAUDE_TOOL_FILE_PATH\" 2>/dev/null || true"
+          }
         ]
       },
-      { "hooks": [{ "type": "command", "command": ".claude/hooks/agency-emit.sh post_tool" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/agency-emit.sh post_tool"
+          }
+        ]
+      }
     ],
     "Notification": [
-      { "hooks": [{ "type": "command", "command": ".claude/hooks/agency-emit.sh notification" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/agency-emit.sh notification"
+          }
+        ]
+      }
     ],
     "SubagentStop": [
-      { "hooks": [{ "type": "command", "command": ".claude/hooks/agency-emit.sh subagent_stop" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/agency-emit.sh subagent_stop"
+          }
+        ]
+      }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": ".claude/hooks/agency-emit.sh stop" }] }
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/agency-emit.sh stop"
+          }
+        ]
+      }
     ]
   },
   "env": {
     "BLUEPRINT_VERSION": "1.0.0",
     "CLAUDE_AGENCY_DASHBOARD": "0"
+  },
+  "mcpServers": {
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    },
+    "serena": {
+      "command": "serena"
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-playwright"
+      ]
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ]
+    }
   }
 }

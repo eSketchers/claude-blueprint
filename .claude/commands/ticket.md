@@ -22,7 +22,12 @@ Optional flag `--auto` skips the human approval gate after the improved plan.
    - Otherwise: ask the user which source to use before proceeding.
 2. Fetch ticket: title, description, acceptance criteria, labels, attachments, linked items.
 3. Classify: **feature** | **bug** | **chore** | **spike**. Report your classification and one-sentence justification.
-4. If **not a feature**, stop here and ask the user whether to continue with a simpler flow (bug / chore don't need adversarial review).
+4. **Check MCP profile compatibility:**
+   - Run `jq -r '.mcpServers | keys[]' .claude/settings.json` to see active MCPs
+   - If minimal profile (only 3 MCPs) + feature ticket → Warn: "Recommend 'frontend', 'backend', or 'ticket' profile for features"
+   - If frontend profile + backend-heavy labels/description → Suggest: "Consider 'ticket' profile"
+   - If profile seems adequate → Proceed silently
+5. If **not a feature**, stop here and ask the user whether to continue with a simpler flow (bug / chore don't need adversarial review).
 
 ## Phase 1 — Plan
 
@@ -35,12 +40,22 @@ Optional flag `--auto` skips the human approval gate after the improved plan.
 - Read existing ADRs and architecture docs
 - **Aim for 10-15 file reads max** - understanding patterns > reading everything
 
-Invoke the `architect` subagent with the fetched ticket. Produce `docs/plans/<ticket-slug>.md` following the superpowers `writing-plans` skill format:
+Invoke the `architect` subagent with the fetched ticket.
+
+**The architect will first perform profile detection:**
+- Analyze ticket requirements (backend/frontend/infra/data/e2e)
+- Check current active MCPs with `jq -r '.mcpServers | keys[]' .claude/settings.json`
+- Determine required profile (minimal/frontend/backend/fullstack/devops/data/ticket)
+- If current profile is insufficient, architect will STOP and output profile upgrade instructions
+- User must exit, upgrade profile, and restart workflow
+
+**If profile is sufficient**, architect produces `docs/plans/<ticket-slug>.md` following the superpowers `writing-plans` skill format:
 
 - Problem statement (one paragraph)
 - Acceptance criteria (bulleted, testable)
 - Proposed approach (step-by-step)
 - Files to change / add (explicit paths)
+- Tools required (MCPs + agents needed) ← NEW
 - Test plan (what to test + at which level)
 - Risks & open questions
 - Rollback plan

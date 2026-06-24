@@ -216,6 +216,40 @@ alias token-burn='jq -r ".daily_spend" ~/.claude-agency/registry.json'
 
 Once Phase 1 is stable, consider these advanced strategies:
 
+### 10. Dynamic MCP Loading (NEW - Highest ROI)
+
+**Impact:** 30-60% token savings by loading only needed MCPs per task
+**Status:** ✅ Available via profile system
+
+Switch MCP profiles based on task type to eliminate unused tool context:
+
+```bash
+# Exploration/planning - minimal MCPs
+./scripts/switch-profile.sh minimal
+claude  # Only sequential-thinking, memory, serena loaded
+
+# Frontend work - add playwright + context7
+./scripts/switch-profile.sh frontend
+claude
+
+# Backend work - add context7 only
+./scripts/switch-profile.sh backend
+claude
+
+# Full /ticket workflow - all MCPs
+./scripts/switch-profile.sh ticket
+claude
+```
+
+**Available profiles:** minimal, frontend, backend, fullstack, ticket
+
+**Token savings:**
+- minimal vs ticket: ~60-70% MCP tokens saved
+- frontend vs ticket: ~30-40% saved
+- backend vs ticket: ~40-50% saved
+
+**See:** [docs/DYNAMIC-CONTEXT-OPTIMIZATION.md](./DYNAMIC-CONTEXT-OPTIMIZATION.md) for complete guide.
+
 ### 11. Template Library
 
 **Impact:** 2K-5K tokens saved per new file creation

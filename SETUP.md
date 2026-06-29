@@ -104,7 +104,6 @@ claude-agency-blueprint/
 ├── templates/
 └── vendor/
     ├── awesome-claude-code/
-    ├── claude-flow/
     ├── graphify/
     └── superpowers/
 ```
@@ -115,7 +114,7 @@ If `vendor/` is empty, the submodule init didn't run — fix it with the command
 
 ## 2. Bootstrap (one-time global install)
 
-This registers Superpowers (plugin), the 6 core MCP servers, Claude Flow, ast-grep, graphify, and pre-commit on your user account. It's idempotent — safe to re-run.
+This registers Superpowers (plugin), the 6 core MCP servers, ast-grep, graphify, and pre-commit on your user account. It's idempotent — safe to re-run.
 
 ```bash
 ./scripts/bootstrap.sh
@@ -125,8 +124,7 @@ What happens, step by step:
 
 1. Installs the **Superpowers** plugin marketplace + the plugin itself via `claude plugin install`
 2. Registers MCP servers: `serena`, `context7`, `sequential-thinking`, `memory`, `playwright`, `github`
-3. Registers the `claude-flow` MCP and starts its daemon
-4. Installs host CLIs: `ast-grep`, `graphify`, `pre-commit` (skipped if already present)
+3. Installs host CLIs: `ast-grep`, `graphify`, `pre-commit` (skipped if already present)
 
 Expect the full run to take 2–5 minutes depending on your network. Warnings are tolerable; hard errors are not — scroll up and read them.
 
@@ -143,7 +141,7 @@ claude plugin list
 
 # MCPs
 claude mcp list
-# Expect: serena, context7, sequential-thinking, memory, playwright, github, claude-flow
+# Expect: serena, context7, sequential-thinking, memory, playwright, github
 
 # Dashboard (boot briefly, then stop with Ctrl-C)
 node dashboard/server.mjs
@@ -151,7 +149,7 @@ node dashboard/server.mjs
 
 # Submodules
 git submodule status
-# Expect: 4 lines with SHAs, no "(missing)" markers
+# Expect: 3 lines with SHAs, no "(missing)" markers
 ```
 
 If any check fails, jump to **[Troubleshooting](#troubleshooting)**.
@@ -471,7 +469,7 @@ rm -f .claude/dashboard
 ### Unregister MCPs globally
 
 ```bash
-for m in serena context7 sequential-thinking memory playwright github claude-flow; do
+for m in serena context7 sequential-thinking memory playwright github; do
   claude mcp remove "$m"
 done
 ```
@@ -494,4 +492,4 @@ rm -rf ~/.claude-agency
 
 - **Blueprint-specific questions**: open an issue in the blueprint repo.
 - **Claude Code questions**: `/help` inside Claude Code, or https://docs.claude.com/claude-code
-- **Superpowers / Graphify / Claude-Flow questions**: see `vendor/<name>/README.md` — they're vendored verbatim for inspection.
+- **Superpowers / Graphify questions**: see `vendor/<name>/README.md` — they're vendored verbatim for inspection.

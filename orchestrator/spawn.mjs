@@ -1,6 +1,6 @@
 // spawn.mjs — launch a headless Claude Code session to execute /ticket.
 // Command is a template configurable in config/orchestrator.json so teams
-// can swap in `claude -p`, `claude-flow swarm`, `npx claude`, etc.
+// can swap in `claude -p`, custom wrappers, etc.
 
 import { spawn as nodeSpawn } from 'node:child_process';
 import { existsSync, mkdirSync, createWriteStream } from 'node:fs';

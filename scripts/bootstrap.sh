@@ -31,15 +31,7 @@ claude mcp add playwright           -- npx -y @playwright/mcp@latest || warn "pl
 claude mcp add github               -- npx -y @modelcontextprotocol/server-github || warn "github add failed"
 
 # ------------------------------------------------------------------
-# 3. Claude Flow CLI + daemon
-# ------------------------------------------------------------------
-log "Registering Claude Flow MCP + daemon..."
-claude mcp add claude-flow -- npx -y @claude-flow/cli@latest || warn "claude-flow add failed"
-npx -y @claude-flow/cli@latest daemon start || warn "claude-flow daemon start skipped"
-npx -y @claude-flow/cli@latest doctor --fix || warn "claude-flow doctor skipped"
-
-# ------------------------------------------------------------------
-# 4. Host-side tooling (ast-grep, graphify, pre-commit)
+# 3. Host-side tooling (ast-grep, graphify, pre-commit)
 # ------------------------------------------------------------------
 log "Installing host tools..."
 

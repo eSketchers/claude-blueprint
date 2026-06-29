@@ -37,16 +37,31 @@ git clone --recurse-submodules <blueprint-url> .agency
 cd ~/work/my-backend-project
 git switch -c chore/agency-adopt-local            # isolate, even though files are gitignored
 
-# Layout A
+# Layout A (sibling)
+
+# Single framework
 "$BLUEPRINT_DIR/scripts/adopt.sh" --framework python
 
-# Layout B
+# Monorepo (multiple frameworks)
+"$BLUEPRINT_DIR/scripts/adopt.sh" --frameworks "python,nextjs"
+
+# Monorepo (auto-detect)
+"$BLUEPRINT_DIR/scripts/adopt.sh" --detect
+
+# Layout B (nested)
 ./.agency/scripts/adopt.sh --framework python
+./.agency/scripts/adopt.sh --frameworks "python,nextjs"
+./.agency/scripts/adopt.sh --detect
 
 claude                                            # start a session
 ```
 
-`--framework` must be one of `python`, `node`, `nextjs`, `nestjs`. For `python` and `nestjs`, the backend deny-list is merged automatically (`--profile backend`).
+**Framework options:**
+- `--framework F` — Single framework (python|node|nextjs|nestjs)
+- `--frameworks F1,F2` — Multiple frameworks (comma-separated, for monorepos)
+- `--detect` — Auto-detect all frameworks in the repo
+
+For `python` and `nestjs`, the backend deny-list is merged automatically (`--profile backend`).
 
 ## What ends up committed vs gitignored
 

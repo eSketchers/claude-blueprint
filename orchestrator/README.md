@@ -112,11 +112,6 @@ Calibrate by watching 1–2 tickets with `dry_run: true` disabled, then adjustin
 
 The default is `claude -p "/ticket {{ticket_url}} --auto"`. This assumes your Claude Code CLI supports a one-shot print mode (`-p` / `--print`). Adjust `spawn.command` + `spawn.args` in the config to match your setup — for example:
 
-- `claude-flow`-based spawn:
-  ```json
-  "command": "npx",
-  "args": ["-y", "@claude-flow/cli@latest", "swarm", "run", "--prompt", "/ticket {{ticket_url}} --auto"]
-  ```
 - Custom wrapper script:
   ```json
   "command": "/opt/agency/bin/spawn-ticket.sh",

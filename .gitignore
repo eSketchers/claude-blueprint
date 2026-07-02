@@ -9,7 +9,3 @@
 
 # Local settings (user-specific)
 .claude/settings.local.json
-
-# Claude Flow daemon files
-.claude-flow/daemon.pid
-.claude-flow/logs/

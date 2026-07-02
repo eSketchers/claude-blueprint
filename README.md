@@ -16,7 +16,6 @@ Reusable Claude Code baseline for all agency projects. Clone into a new project 
 | **MCP** | memory | Persistent knowledge graph |
 | **MCP** | playwright | Browser E2E tests |
 | **MCP** | github | PRs / issues |
-| **CLI** | [claude-flow](https://github.com/ruvnet/claude-flow) | Multi-agent swarm orchestration |
 | **CLI** | [ast-grep](https://ast-grep.github.io/) | Structural refactors |
 | **Hooks** | pre-commit + Flake8 / ESLint / Prettier | Lint on commit |
 
@@ -100,7 +99,6 @@ pre-commit/
 vendor/                 External tools vendored as git submodules
   superpowers/          Plugin: TDD + worktree + review skills (obra)
   graphify/             Skill: knowledge-graph indexing (safishamsi)
-  claude-flow/          MCP: multi-agent swarm orchestration (ruvnet)
   awesome-claude-code/  Reference: curated index of skills/hooks/agents
 
 scripts/

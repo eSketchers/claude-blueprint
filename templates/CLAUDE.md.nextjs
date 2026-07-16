@@ -1,5 +1,7 @@
 # Claude Code Configuration — Next.js
 
+<!-- BEGIN BLUEPRINT -->
+
 ## Project identity
 
 - **Framework**: Next.js 15 (App Router)
@@ -82,3 +84,5 @@ If you're running alongside other agents, block with `/wait-for-reply "<question
 - **context7** for Next.js 15 docs (API surface changes frequently).
 - **playwright** MCP for browser tests.
 - Subagents: `coder`, `tester`, `reviewer`.
+
+<!-- END BLUEPRINT -->

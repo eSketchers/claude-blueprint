@@ -1,5 +1,7 @@
 # Claude Code Configuration — Node / TypeScript
 
+<!-- BEGIN BLUEPRINT -->
+
 ## Project identity
 
 - **Language**: TypeScript 5.x, Node 20+
@@ -85,3 +87,5 @@ Shows up in the dashboard **Meeting Room**; polls up to 120s; resumes the turn w
 - **context7** MCP for Node library docs.
 - **playwright** MCP for browser E2E if this is a web app.
 - Subagents: invoke `coder` for implementation, `tester` for test suites, `reviewer` before PR.
+
+<!-- END BLUEPRINT -->

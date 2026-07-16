@@ -25,6 +25,7 @@ NO_PRECOMMIT=0
 DRY_RUN=0
 ACTION="adopt"   # adopt | uninstall | doctor
 QUIET=0
+MERGE_STRATEGY="merge"  # merge | overwrite | backup-only
 
 usage() {
   cat <<'USAGE'
@@ -39,6 +40,7 @@ Other options:
   --profile P         'backend' merges a stricter deny-list. Default for python/nestjs.
   --force             Overwrite existing .claude/. Moves it to .claude.bak-<ts>/.
   --no-precommit      Skip `pre-commit install`.
+  --merge-strategy S  How to handle existing CLAUDE.md: merge|overwrite|backup-only (default: merge).
   --dry-run           Print every op, change nothing.
   --uninstall         Remove everything adopt created, restore .gitignore.
   --doctor [--quiet]  Health-check: validate marker and symlinks.
@@ -69,6 +71,11 @@ while [[ $# -gt 0 ]]; do
     --profile)     PROFILE="${2:?}"; shift 2 ;;
     --force)       FORCE=1; shift ;;
     --no-precommit) NO_PRECOMMIT=1; shift ;;
+    --merge-strategy)
+      MERGE_STRATEGY="${2:?}"
+      [[ "$MERGE_STRATEGY" =~ ^(merge|overwrite|backup-only)$ ]] || die "Invalid --merge-strategy: $MERGE_STRATEGY (must be merge|overwrite|backup-only)"
+      shift 2
+      ;;
     --dry-run)     DRY_RUN=1; shift ;;
     --uninstall)   ACTION="uninstall"; shift ;;
     --doctor)      ACTION="doctor"; shift ;;
@@ -217,38 +224,137 @@ if [[ -z "$PROFILE" ]]; then
   done
 fi
 
+# ---------- Smart CLAUDE.md merge ----------
+smart_merge_claude_md() {
+  local target_file="$1"
+  local source_file="$2"
+  local strategy="${3:-merge}"
+
+  # If target doesn't exist, just copy
+  if [[ ! -f "$target_file" ]]; then
+    log "No existing CLAUDE.md — copying fresh"
+    if [[ $DRY_RUN -eq 1 ]]; then
+      printf '  DRY: cp %s %s\n' "$source_file" "$target_file"
+    else
+      cp "$source_file" "$target_file"
+    fi
+    return
+  fi
+
+  # Create timestamped backup
+  local timestamp
+  timestamp="$(date +%Y-%m-%d-%H%M%S)"
+  local backup_file="${target_file}.backup-${timestamp}"
+
+  if [[ $DRY_RUN -eq 1 ]]; then
+    printf '  DRY: cp %s %s\n' "$target_file" "$backup_file"
+  else
+    cp "$target_file" "$backup_file"
+    log "Created backup: $(basename "$backup_file")"
+  fi
+
+  # Handle strategy
+  case "$strategy" in
+    backup-only)
+      log "Strategy: backup-only — CLAUDE.md unchanged"
+      return
+      ;;
+    overwrite)
+      log "Strategy: overwrite — replacing entire CLAUDE.md"
+      if [[ $DRY_RUN -eq 1 ]]; then
+        printf '  DRY: cp %s %s\n' "$source_file" "$target_file"
+      else
+        cp "$source_file" "$target_file"
+      fi
+      return
+      ;;
+    merge)
+      # Check if target has markers
+      if ! grep -q "<!-- BEGIN BLUEPRINT -->" "$target_file" || \
+         ! grep -q "<!-- END BLUEPRINT -->" "$target_file"; then
+        warn "Existing CLAUDE.md has no blueprint markers — treating as overwrite"
+        if [[ $DRY_RUN -eq 1 ]]; then
+          printf '  DRY: cp %s %s\n' "$source_file" "$target_file"
+        else
+          cp "$source_file" "$target_file"
+        fi
+        return
+      fi
+
+      log "Strategy: merge — preserving user sections, updating blueprint sections"
+
+      if [[ $DRY_RUN -eq 1 ]]; then
+        printf '  DRY: Merge blueprint sections into %s\n' "$target_file"
+        return
+      fi
+
+      # Extract sections
+      local tmp_merged
+      tmp_merged="$(mktemp)"
+      local tmp_before
+      tmp_before="$(mktemp)"
+      local tmp_after
+      tmp_after="$(mktemp)"
+      local tmp_blueprint
+      tmp_blueprint="$(mktemp)"
+
+      # Extract content before first marker from target
+      sed -n '1,/<!-- BEGIN BLUEPRINT -->/p' "$target_file" | sed '$d' > "$tmp_before"
+
+      # Extract content after last marker from target
+      sed -n '/<!-- END BLUEPRINT -->/,$p' "$target_file" | sed '1d' > "$tmp_after"
+
+      # Extract blueprint section from source (everything between markers, including markers)
+      sed -n '/<!-- BEGIN BLUEPRINT -->/,/<!-- END BLUEPRINT -->/p' "$source_file" > "$tmp_blueprint"
+
+      # Assemble merged file
+      cat "$tmp_before" > "$tmp_merged"
+      [[ -s "$tmp_before" ]] && echo "" >> "$tmp_merged"  # Add blank line if before section exists
+      cat "$tmp_blueprint" >> "$tmp_merged"
+      [[ -s "$tmp_after" ]] && echo "" >> "$tmp_merged"  # Add blank line if after section exists
+      cat "$tmp_after" >> "$tmp_merged"
+
+      # Replace target with merged content
+      mv "$tmp_merged" "$target_file"
+
+      # Cleanup temp files
+      rm -f "$tmp_before" "$tmp_after" "$tmp_blueprint"
+
+      log "Merged blueprint sections into CLAUDE.md"
+      ;;
+  esac
+}
+
 # ---------- Composite CLAUDE.md generator ----------
 generate_claude_md() {
   local frameworks=("$@")
   local output="$PROJECT_ROOT/CLAUDE.md"
 
-  if [[ -f "$output" ]]; then
-    log "Existing CLAUDE.md preserved. Template would be for: ${frameworks[*]}"
-    return
-  fi
-
   log "Generating CLAUDE.md for ${#frameworks[@]} framework(s)"
+
+  # Generate temporary source file
+  local tmp_source
+  tmp_source="$(mktemp)"
 
   if [[ ${#frameworks[@]} -eq 1 ]]; then
     # Single framework - use template directly
     local template="$BLUEPRINT_RESOLVED/templates/CLAUDE.md.${frameworks[0]}"
     if [[ -f "$template" ]]; then
-      if [[ $DRY_RUN -eq 1 ]]; then
-        printf '  DRY: cp %s %s\n' "$template" "$output"
-      else
-        cp "$template" "$output"
-      fi
+      cp "$template" "$tmp_source"
     else
       warn "No template found for ${frameworks[0]}"
+      rm -f "$tmp_source"
+      return
     fi
   else
     # Multiple frameworks - generate composite
     if [[ $DRY_RUN -eq 1 ]]; then
       printf '  DRY: Generate composite CLAUDE.md for: %s\n' "${frameworks[*]}"
+      rm -f "$tmp_source"
       return
     fi
 
-    cat > "$output" <<'EOF'
+    cat > "$tmp_source" <<'EOF'
 # Claude Code Configuration — Monorepo
 
 ## Workspace Detection
@@ -291,25 +397,25 @@ EOF
           ;;
       esac
 
-      echo "## Workspace: $fw${workspace_path:+ ($workspace_path)}" >> "$output"
-      echo "" >> "$output"
+      echo "## Workspace: $fw${workspace_path:+ ($workspace_path)}" >> "$tmp_source"
+      echo "" >> "$tmp_source"
 
       # Inject framework name from first line of template
       local framework_name
       framework_name="$(head -n1 "$template" | sed 's/# Claude Code Configuration — //')"
-      echo "**Framework:** $framework_name" >> "$output"
-      echo "" >> "$output"
+      echo "**Framework:** $framework_name" >> "$tmp_source"
+      echo "" >> "$tmp_source"
 
       # Append template content (skip first line)
-      tail -n +2 "$template" >> "$output"
+      tail -n +2 "$template" >> "$tmp_source"
 
-      echo "" >> "$output"
-      echo "---" >> "$output"
-      echo "" >> "$output"
+      echo "" >> "$tmp_source"
+      echo "---" >> "$tmp_source"
+      echo "" >> "$tmp_source"
     done
 
     # Shared conventions footer
-    cat >> "$output" <<'EOF'
+    cat >> "$tmp_source" <<'EOF'
 ## Shared Conventions (All Workspaces)
 
 **Behavioral rules (always enforced):**
@@ -330,6 +436,12 @@ EOF
 - If unclear which workspace to modify, ask the architect agent
 EOF
   fi
+
+  # Apply smart merge strategy
+  smart_merge_claude_md "$output" "$tmp_source" "$MERGE_STRATEGY"
+
+  # Cleanup temp file
+  rm -f "$tmp_source"
 }
 
 # ---------- Merged pre-commit config generator ----------

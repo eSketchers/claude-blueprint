@@ -1,5 +1,7 @@
 # Claude Code Configuration — Django (backend) + React (frontend)
 
+<!-- BEGIN BLUEPRINT -->
+
 ## Project identity
 
 - **Backend**: Django 5.x + Django REST Framework, Python 3.11+
@@ -126,3 +128,5 @@ If running alongside other agents (which is the default in this playground), use
 - **context7** MCP — current Django 5 / DRF / React 18 / TanStack Query docs.
 - **playwright** MCP — browser E2E.
 - Subagents: `backend-dev` (Django), `frontend-dev` (React), `architect` (spec), `qa-lead` (test strategy), `reviewer` / `code-reviewer` (pre-PR).
+
+<!-- END BLUEPRINT -->

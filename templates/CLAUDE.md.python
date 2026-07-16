@@ -1,5 +1,7 @@
 # Claude Code Configuration — Python Project
 
+<!-- BEGIN BLUEPRINT -->
+
 ## Project identity
 
 - **Language**: Python 3.11+
@@ -107,3 +109,5 @@ Don't use `/wait-for-reply` for trivial questions — only when you're genuinely
 - Never run queries against prod/staging. Read-only local replicas only, referenced by `DATABASE_URL`.
 - Never modify CI workflows without a linked ticket. CI changes are blast-radius.
 - PRs touching `migrations/`, `auth/`, `billing/`, or `*_consumer.py` require a human architect review before merge, even if tests pass.
+
+<!-- END BLUEPRINT -->

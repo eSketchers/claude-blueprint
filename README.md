@@ -38,6 +38,21 @@ cd ~/work/my-project
 ./scripts/graphify-index.sh
 ```
 
+## Getting Help
+
+Having issues? Check our comprehensive [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for solutions to common problems:
+
+- Bootstrap failures (Node/Python/CLI issues)
+- Adoption problems (Git, framework detection)
+- Orchestrator issues (config, budget, stuck tickets)
+- Dashboard problems (blank page, performance)
+- Agent crashes and profile errors
+
+For additional support:
+- Run diagnostics: `./scripts/doctor.sh`
+- Check [detailed setup docs](docs/SETUP.md)
+- Report issues: [GitHub Issues](https://github.com/your-org/claude-agency-blueprint/issues)
+
 ## Token Optimization
 
 The blueprint includes built-in optimizations targeting 70-90% reduction in wasted context:

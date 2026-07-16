@@ -3,7 +3,7 @@
 // can swap in `claude -p`, custom wrappers, etc.
 
 import { spawn as nodeSpawn } from 'node:child_process';
-import { existsSync, mkdirSync, createWriteStream } from 'node:fs';
+import { existsSync, mkdirSync, createWriteStream, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 function expand(tpl, vars) {
@@ -14,8 +14,9 @@ function expand(tpl, vars) {
  * @param {{ticket_id:string, ticket_url:string, repo_path:string, title:string}} ticket
  * @param {{command:string, args:string[], cwd?:string, env?:Record<string,string>, dry_run?:boolean}} spec
  * @param {string} logDir
+ * @param {import('./budget.mjs').Budget} [budget] - Optional budget instance for cost tracking
  */
-export function spawnTicketAgent(ticket, spec, logDir) {
+export function spawnTicketAgent(ticket, spec, logDir, budget) {
   const vars = {
     ticket_url: ticket.ticket_url,
     ticket_id:  ticket.ticket_id,
@@ -24,7 +25,20 @@ export function spawnTicketAgent(ticket, spec, logDir) {
   };
 
   const cmd  = expand(spec.command, vars);
-  const args = (spec.args || []).map(a => expand(a, vars));
+  // If args contains '/ticket', add JSON output flags before it
+  const rawArgs = spec.args || [];
+  const finalArgs = [];
+  let hasTicketCommand = false;
+  for (const arg of rawArgs) {
+    const expandedArg = expand(arg, vars);
+    if (expandedArg === '/ticket') {
+      // Insert JSON output flags before /ticket
+      finalArgs.push('-p', '--output-format', 'stream-json');
+      hasTicketCommand = true;
+    }
+    finalArgs.push(expandedArg);
+  }
+  const args = finalArgs;
   const cwd  = spec.cwd ? expand(spec.cwd, vars) : vars.repo_path;
   const env  = { ...process.env, ...(spec.env || {}) };
 
@@ -49,6 +63,36 @@ export function spawnTicketAgent(ticket, spec, logDir) {
   child.stdout.pipe(out);
   child.stderr.pipe(out);
   child.unref();
+
+  // After the child process exits, extract and track real costs
+  child.on('exit', async (code) => {
+    // Read the log file to extract the final cost
+    try {
+      const logContent = readFileSync(logFile, 'utf8');
+      const lines = logContent.split('\n');
+
+      // Look for the final result event with total_cost_usd
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (line.startsWith('{') && line.includes('total_cost_usd')) {
+          try {
+            const event = JSON.parse(line);
+            if (event.total_cost_usd !== undefined) {
+              if (budget) {
+                budget.addRealCost(ticket.ticket_id, event.total_cost_usd);
+                console.log(`[spawn] Tracked real cost for ${ticket.ticket_id}: $${event.total_cost_usd}`);
+              }
+              break;
+            }
+          } catch (e) {
+            // Not a valid JSON event, continue
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`[spawn] Failed to extract cost for ${ticket.ticket_id}:`, err.message);
+    }
+  });
 
   return { pid: child.pid, logFile, dry_run: false, command: `${cmd} ${args.join(' ')}` };
 }

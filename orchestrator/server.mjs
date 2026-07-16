@@ -103,7 +103,7 @@ async function intakeTick() {
         ticket_url: t.url,
         repo_path:  t.repo_path,
         title:      t.title,
-      }, spec, LOG_DIR);
+      }, spec, LOG_DIR, budget);
 
       registry.update(t.id, {
         status: result.dry_run ? 'dry_run' : 'in_progress',

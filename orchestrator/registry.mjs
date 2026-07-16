@@ -80,4 +80,30 @@ export class Registry {
     const t = this.state.tickets[ticketId];
     return t ? (t.spend_usd || 0) : 0;
   }
+
+  /** Get tickets with real cost tracking */
+  getRealCostStats() {
+    const stats = {
+      total_tickets: 0,
+      with_real_cost: 0,
+      total_real_cost: 0,
+      total_estimated_cost: 0,
+      average_variance: 0
+    };
+
+    for (const [ticketId, data] of Object.entries(this.state.tickets || {})) {
+      stats.total_tickets++;
+      if (data.real_cost_tracked) {
+        stats.with_real_cost++;
+        stats.total_real_cost += data.spend_usd || 0;
+        stats.total_estimated_cost += data.estimated_spend_usd || 0;
+      }
+    }
+
+    if (stats.with_real_cost > 0) {
+      stats.average_variance = (stats.total_real_cost / stats.total_estimated_cost - 1) * 100;
+    }
+
+    return stats;
+  }
 }

@@ -38,6 +38,12 @@
     "killswitch_file": "~/.claude-agency/KILLSWITCH"
   },
 
+  "retry": {
+    "max_attempts": 3,
+    "backoff_ms": [5000, 30000, 300000],
+    "_comment": "Retry failed spawns with exponential backoff: 5s, 30s, 5min"
+  },
+
   "spawn": {
     "_comment_1": "Template vars: {{ticket_url}}, {{ticket_id}}, {{repo_path}}, {{title}}",
     "_comment_2": "Default targets `claude -p` headless mode. If your Claude Code CLI uses a different flag, customize here.",

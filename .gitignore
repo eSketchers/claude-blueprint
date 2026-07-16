@@ -9,3 +9,7 @@
 
 # Local settings (user-specific)
 .claude/settings.local.json
+
+# Claude Agency Blueprint - Configuration backups
+*.backup-*
+agents.backup/

@@ -9,6 +9,7 @@ import { join, dirname, resolve, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { buildDigest, formatMarkdown } from '../orchestrator/digest.mjs';
+import { WebSocketServer } from 'ws';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.AGENCY_PORT || 7842);
@@ -240,6 +241,88 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET') return serveStatic(req, res, url.pathname === '/' ? '/index.html' : url.pathname);
   res.writeHead(404); res.end('not found');
 });
+
+// WebSocket server
+const wss = new WebSocketServer({ server });
+
+// Track last read position for incremental updates
+let lastEventPosition = 0;
+let eventWatcher = null;
+
+// WebSocket connection handler
+wss.on('connection', (ws) => {
+  console.log('[dashboard] WebSocket client connected');
+
+  // Send current state immediately
+  ws.send(JSON.stringify({
+    type: 'full_state',
+    data: buildState()
+  }));
+
+  ws.on('close', () => {
+    console.log('[dashboard] WebSocket client disconnected');
+  });
+
+  ws.on('error', (err) => {
+    console.error('[dashboard] WebSocket error:', err);
+  });
+});
+
+// Watch events.jsonl for changes
+function startEventWatcher() {
+  if (eventWatcher) return; // Already watching
+
+  eventWatcher = watch(EVENTS, (eventType) => {
+    if (eventType === 'change') {
+      // Read new events only
+      const stats = statSync(EVENTS);
+      if (stats.size > lastEventPosition) {
+        const stream = createReadStream(EVENTS, {
+          start: lastEventPosition,
+          encoding: 'utf8'
+        });
+
+        let buffer = '';
+        stream.on('data', (chunk) => {
+          buffer += chunk;
+        });
+
+        stream.on('end', () => {
+          const lines = buffer.split('\n').filter(Boolean);
+          const newEvents = [];
+
+          for (const line of lines) {
+            try {
+              const event = JSON.parse(line);
+              newEvents.push(event);
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+
+          if (newEvents.length > 0) {
+            // Broadcast to all connected clients
+            const message = JSON.stringify({
+              type: 'incremental_events',
+              data: newEvents
+            });
+
+            wss.clients.forEach((client) => {
+              if (client.readyState === 1) { // OPEN
+                client.send(message);
+              }
+            });
+          }
+
+          lastEventPosition = stats.size;
+        });
+      }
+    }
+  });
+}
+
+// Start watching when server starts
+startEventWatcher();
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`[agency-dashboard] http://127.0.0.1:${PORT}`);

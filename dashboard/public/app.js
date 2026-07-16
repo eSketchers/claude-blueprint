@@ -1,7 +1,76 @@
-// app.js — tiny vanilla client. Polls /api/state.json every 2s.
+// app.js — tiny vanilla client. WebSocket with polling fallback.
 const POLL_MS = 2000;
 
 const $ = (sel) => document.querySelector(sel);
+
+// WebSocket support
+let ws = null;
+let reconnectTimeout = null;
+let fallbackInterval = null;
+
+function connectWebSocket() {
+  // Clear any existing reconnect timeout
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${window.location.host}`);
+
+  ws.onopen = () => {
+    console.log('WebSocket connected');
+    // Stop polling if we were in fallback mode
+    if (fallbackInterval) {
+      clearInterval(fallbackInterval);
+      fallbackInterval = null;
+    }
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data);
+
+      if (message.type === 'full_state') {
+        // Replace entire state
+        updateUI(message.data);
+      } else if (message.type === 'incremental_events') {
+        // Apply incremental updates
+        applyIncrementalUpdates(message.data);
+      }
+    } catch (err) {
+      console.error('Failed to process WebSocket message:', err);
+    }
+  };
+
+  ws.onerror = (err) => {
+    console.error('WebSocket error:', err);
+  };
+
+  ws.onclose = () => {
+    console.log('WebSocket disconnected, falling back to polling');
+    ws = null;
+
+    // Start polling as fallback
+    if (!fallbackInterval) {
+      fallbackInterval = setInterval(fetchState, POLL_MS);
+    }
+
+    // Try to reconnect after 5 seconds
+    reconnectTimeout = setTimeout(connectWebSocket, 5000);
+  };
+}
+
+// Update UI with state data
+function updateUI(state) {
+  render(state);
+}
+
+// Apply incremental updates
+function applyIncrementalUpdates(events) {
+  // For simplicity, just refetch full state
+  fetchState();
+}
 
 function fmtAgo(ms) {
   if (ms < 60_000)      return Math.floor(ms / 1000) + 's ago';
@@ -123,12 +192,19 @@ function openUnblockModal(agent) {
   $('#unblock-text').focus();
 }
 
-async function tick() {
+async function fetchState() {
   try {
     const r = await fetch('/api/state.json');
     const state = await r.json();
     render(state);
   } catch {/* transient network errors are fine */}
+}
+
+async function tick() {
+  // Only fetch if WebSocket is not connected
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    await fetchState();
+  }
   try {
     const r = await fetch('/api/digest');
     if (r.ok) renderDigest(await r.json());
@@ -186,5 +262,9 @@ function short(p) {
   return parts.slice(-2).join('/');
 }
 
+// Connect WebSocket on page load
+connectWebSocket();
+
+// Initial tick and periodic polling (only used as fallback when WebSocket fails)
 tick();
 setInterval(tick, POLL_MS);

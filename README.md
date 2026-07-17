@@ -2,7 +2,7 @@
 
 Reusable Claude Code baseline for all agency projects. Clone into a new project root, or copy `.claude/` + the appropriate `CLAUDE.md` template.
 
-**👉 New here? Start with [SETUP.md](./SETUP.md) — full step-by-step onboarding, from host install to shipping your first PR via the `/ticket` workflow.**
+**👉 New here? Start with [SETUP.md](./docs/SETUP.md) — full step-by-step onboarding, from host install to shipping your first PR via the `/ticket` workflow.**
 
 ## Stack
 
@@ -50,7 +50,8 @@ Having issues? Check our comprehensive [Troubleshooting Guide](docs/TROUBLESHOOT
 
 For additional support:
 - Run diagnostics: `./scripts/doctor.sh`
-- Check [detailed setup docs](docs/SETUP.md)
+- Check [Setup Guide](docs/SETUP.md) or [Advanced Guide](docs/ADVANCED.md)
+- Review [recent changes](docs/CHANGELOG.md)
 - Report issues: [GitHub Issues](https://github.com/your-org/claude-agency-blueprint/issues)
 
 ## Token Optimization
@@ -82,7 +83,7 @@ claude  # Start new session
 claude  # Playwright + context7 loaded, others excluded
 ```
 
-See **[docs/TOKEN-OPTIMIZATION.md](./docs/TOKEN-OPTIMIZATION.md)** and **[docs/DYNAMIC-CONTEXT-OPTIMIZATION.md](./docs/DYNAMIC-CONTEXT-OPTIMIZATION.md)** for complete guides.
+See **[docs/ADVANCED.md](./docs/ADVANCED.md#token-optimization)** for the complete optimization guide, including all three phases and the profile system.
 
 **Note:** Savings projections are based on theoretical analysis. Actual reduction depends on codebase structure and task types.
 

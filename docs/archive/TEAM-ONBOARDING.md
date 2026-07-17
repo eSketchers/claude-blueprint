@@ -1,3 +1,13 @@
+> **⚠️ ARCHIVED DOCUMENTATION**
+>
+> This document has been archived. For current documentation, see:
+> - [Setup Guide](../SETUP.md) - Getting started and team onboarding
+> - [Changelog](../CHANGELOG.md) - Recent changes
+>
+> This archived version is kept for historical reference and contains detailed technical information that may still be useful.
+
+---
+
 # Team Onboarding — Claude Agency Blueprint
 
 Welcome. You're about to get the blueprint running against your backend project, locally, on your laptop. This takes ~10 minutes.

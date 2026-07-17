@@ -1,3 +1,13 @@
+> **⚠️ ARCHIVED DOCUMENTATION**
+>
+> This document has been archived. For current documentation, see:
+> - [Advanced Guide](../ADVANCED.md) - Profile System and Token Optimization sections
+> - [Changelog](../CHANGELOG.md) - Recent changes
+>
+> This archived version is kept for historical reference and contains detailed technical information that may still be useful.
+
+---
+
 # Dynamic Context Optimization
 
 This guide explains how to activate skills and MCPs only when needed, reducing context usage by 30-50% for focused tasks.

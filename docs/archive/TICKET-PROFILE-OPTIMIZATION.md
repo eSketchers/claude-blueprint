@@ -1,3 +1,13 @@
+> **⚠️ ARCHIVED DOCUMENTATION**
+>
+> This document has been archived. For current documentation, see:
+> - [Advanced Guide](../ADVANCED.md) - Profile System and Ticket Workflows sections
+> - [Changelog](../CHANGELOG.md) - Recent changes
+>
+> This archived version is kept for historical reference and contains detailed technical information that may still be useful.
+
+---
+
 # Ticket Workflow Profile Optimization
 
 How to use the right profile for different ticket types to maximize token savings.

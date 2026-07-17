@@ -1,3 +1,13 @@
+> **⚠️ ARCHIVED DOCUMENTATION**
+>
+> This document has been archived. For current documentation, see:
+> - [Advanced Guide](../ADVANCED.md) - Profile System section
+> - [Changelog](../CHANGELOG.md) - Recent changes
+>
+> This archived version is kept for historical reference and contains detailed technical information that may still be useful.
+
+---
+
 # Agent Profile Management
 
 Connect agent availability to MCP profiles for maximum context optimization.

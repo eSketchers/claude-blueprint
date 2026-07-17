@@ -205,7 +205,7 @@ Inside Claude Code, type `/ticket <ticket-url>` to start your first piece of wor
 
 ## Path B — Adopt into an existing project
 
-See **[docs/LOCAL-ADOPTION.md](./docs/LOCAL-ADOPTION.md)** for the full adoption guide, or use the one-command flow:
+Use the one-command adoption flow:
 
 ```bash
 export BLUEPRINT_DIR=~/work/claude-agency-blueprint
@@ -215,7 +215,7 @@ cd ~/path/to/existing-app
 
 The script is idempotent, detects sibling vs nested layout automatically, gitignores its output, and supports `--uninstall` and `--doctor`.
 
-For rolling this out across a team, see **[docs/TEAM-ONBOARDING.md](./docs/TEAM-ONBOARDING.md)** — a one-page handoff you can share.
+For advanced adoption topics including monorepo support and CLAUDE.md merge strategies, see **[docs/ADVANCED.md](./docs/ADVANCED.md#monorepo-support)**.
 
 ---
 

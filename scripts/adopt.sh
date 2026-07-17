@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # adopt.sh — adopt the agency blueprint into an existing repo, locally.
 #
-# See docs/LOCAL-ADOPTION.md for developer-facing usage.
+# See docs/SETUP.md for developer-facing usage.
 # See docs/superpowers/specs/2026-04-21-local-only-adoption-design.md for design.
 #
 # Two layouts (auto-detected):

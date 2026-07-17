@@ -522,9 +522,8 @@ tail -n 100 ~/.claude-agency/agent-logs/*.log
 ### 2. Check Documentation
 
 - [README](../README.md) - Overview and quick start
-- [SETUP](./SETUP.md) - Detailed setup instructions
-- [LOCAL-ADOPTION](./LOCAL-ADOPTION.md) - Project adoption guide
-- [MONOREPO](./MONOREPO.md) - Monorepo-specific guidance
+- [SETUP](./SETUP.md) - Detailed setup and adoption instructions
+- [ADVANCED](./ADVANCED.md) - Advanced topics including monorepo support, profiles, and optimization
 
 ### 3. Report Issues
 

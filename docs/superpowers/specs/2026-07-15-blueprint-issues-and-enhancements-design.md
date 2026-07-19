@@ -3,19 +3,71 @@
 **Date:** 2026-07-15
 **Analysis Type:** Component-by-Component
 **Scope:** Entire claude-agency-blueprint system
-**Last Updated:** 2026-07-17
+**Last Updated:** 2026-07-19
 
 ---
 
 ## Implementation Status
 
-**✅ COMPLETED (9 issues):**
+**✅ COMPLETED (15 issues):**
 - 4 CRITICAL priority fixes (3 in PR #6, 1 in PR #5)
-- 5 HIGH priority fixes (all in PR #6)
+- 7 HIGH priority fixes (all in PR #6)
+- 3 MEDIUM priority fixes (all in PR #6 - documentation consolidation)
+- 1 LOW priority fix (PR #6 - changelog)
 
-**📋 REMAINING:**
-- 5+ MEDIUM priority issues
-- 10+ LOW priority issues
+**📋 REMAINING (30 issues):**
+- 0 CRITICAL priority issues
+- 0 HIGH priority issues
+- 15 MEDIUM priority issues
+- 15 LOW priority issues
+
+### Remaining Issues by Component
+
+**Cross-Cutting Issues (1):**
+- Issue 5: No integration tests [MEDIUM]
+
+**Orchestrator (4):**
+- Issue 2: No force-kill on halt [MEDIUM]
+- Issue 4: GitHub-only source support [MEDIUM]
+- Issue 5: Session→ticket correlation approximate [LOW]
+- Issue 6: Stuck detection may false-positive [MEDIUM]
+
+**Dashboard (4):**
+- Issue 2: No authentication [LOW]
+- Issue 3: File-based inbox/outbox race conditions [MEDIUM]
+- Issue 5: No agent output preview [MEDIUM]
+- Issue 6: No search/filter capability [LOW]
+
+**Agent System (5):**
+- Issue 1: Profile switching is destructive [MEDIUM]
+- Issue 2: No agent version tracking [LOW]
+- Issue 3: Agent profiles hardcoded in JSON [LOW]
+- Issue 4: No agent performance metrics [MEDIUM]
+- Issue 5: Code-reviewer is superpowers symlink [LOW]
+
+**Adoption & Bootstrap (5):**
+- Issue 2: Monorepo auto-detection untested [MEDIUM]
+- Issue 3: No adoption preview mode [MEDIUM]
+- Issue 4: Adopt script is complex (482 lines) [LOW]
+- Issue 5: No uninstall validation [LOW]
+- Issue 6: Pre-commit config selection manual [MEDIUM]
+
+**Token Optimization (6):**
+- Issue 1: Savings projections unvalidated [MEDIUM]
+- Issue 2: No automatic profile detection [MEDIUM]
+- Issue 3: Graphify not incremental by default [LOW]
+- Issue 4: Template library (Phase 2) incomplete [LOW]
+- Issue 5: Module batching not implemented [LOW]
+- Issue 6: No token usage analytics [MEDIUM]
+
+**Hooks & Integration (5):**
+- Issue 2: Ticket detection regex may miss formats [LOW]
+- Issue 3: Agency-emit.sh writes to events.jsonl always [LOW]
+- Issue 4: No hook failure recovery [MEDIUM]
+- Issue 5: Dynamic-context.sh purpose unclear [LOW]
+
+**Documentation & Developer Experience (1):**
+- Issue 6: ASCII diagrams brittle [LOW]
 
 See [Pull Request #6](https://github.com/eSketchers/claude-blueprint/pull/6) for completed implementations.
 
@@ -1008,70 +1060,72 @@ done
 ### Issue 1: 50+ markdown files hard to navigate
 
 **Priority:** MEDIUM
+**Status:** ✅ COMPLETED - PR #6 (Commits: 90ccf4b, 4bc103a, a1d03c3)
 
 **Problem:** Duplicated info across multiple docs
 
 **Solution:**
 - Consolidate related docs:
-  - MONOREPO-* → Single `MONOREPO.md`
-  - TOKEN-OPTIMIZATION + phases/ → Single `TOKEN-OPTIMIZATION.md`
-  - Setup guides → Single `SETUP.md` with sections
-- Create `docs/index.md` with clear navigation
-- Archive old docs to `docs/archive/`
+  - MONOREPO-* + TOKEN-OPTIMIZATION + phases/ → `ADVANCED.md` (consolidates 11 files)
+  - Setup guides → `SETUP.md` with sections
+  - Changelog history → `CHANGELOG.md`
+- Archive old docs to `docs/archive/` (15 files archived)
+- Update all cross-references
+
+**Implementation:**
+- Created docs/ADVANCED.md (36KB, 1,393 lines) - consolidates 11 source files
+- Created docs/SETUP.md (8KB, 280 lines) - complete new user walkthrough
+- Created docs/CHANGELOG.md (6KB, 162 lines) - version history
+- Archived 15 files to docs/archive/ preserving git history
+- Added deprecation notices to all archived files
+- Updated cross-references in README.md, TROUBLESHOOTING.md, scripts/adopt.sh
 
 ---
 
 ### Issue 2: Multiple similar docs
 
 **Priority:** MEDIUM
+**Status:** ✅ COMPLETED - PR #6 (Commit: 890eac1)
 
 **Problem:** MONOREPO-SUMMARY vs MONOREPO-SUPPORT-SOLUTION vs MONOREPO-QUICK-START
 
 **Solution:**
-- Merge into single `docs/MONOREPO.md`:
-  - Quick Start (3 commands)
-  - How It Works (architecture)
-  - Troubleshooting (common issues)
-  - Design Decisions (from -SOLUTION doc)
-- Symlink old filenames to new location
-- Update all references in other docs
+- Merged into single section in `docs/ADVANCED.md`:
+  - Section 1: Monorepo Support (includes Quick Start, How It Works, Troubleshooting, Design Decisions)
+  - Consolidates MONOREPO-SUMMARY.md, MONOREPO-SUPPORT-SOLUTION.md, MONOREPO-QUICK-START.md
+- Updated all references in other docs
 
 ---
 
 ### Issue 3: Setup guides fragmented
 
 **Priority:** MEDIUM
+**Status:** ✅ COMPLETED - PR #6 (Commits: e72853b, d6efb52)
 
 **Problem:** README vs SETUP.md vs LOCAL-ADOPTION.md
 
 **Solution:**
-- Structure as:
-  - README.md - Overview + quick start (3 paragraphs)
-  - SETUP.md - Detailed walkthrough (new users)
-  - ADVANCED.md - Advanced topics (orchestrator, profiles, monorepo)
-- Cross-reference clearly
-- Add "Next steps" at end of each doc
+- Restructured as:
+  - README.md - Overview + quick start (updated with consolidated references)
+  - SETUP.md - Detailed walkthrough (new users) - consolidates LOCAL-ADOPTION.md
+  - ADVANCED.md - Advanced topics (orchestrator, profiles, monorepo, token optimization)
+- Cross-referenced clearly in README "Getting Help" section
+- Added "Next steps" at end of each doc
 
 ---
 
 ### Issue 4: No changelog
 
 **Priority:** LOW
+**Status:** ✅ COMPLETED - PR #6 (Commit: 6ec10ff)
 
 **Problem:** Can't see what changed between versions
 
 **Solution:**
-- Create `CHANGELOG.md` following keepachangelog.com:
-  ```markdown
-  ## [Unreleased]
-  ### Added
-  - Smart CLAUDE.md merging
-  ### Fixed
-  - Pre-commit hook error handling
-  ```
-- Generate from git commits using conventional commits
-- Update on every release
-- Link from README
+- Created `CHANGELOG.md` following keepachangelog.com format
+- Documented 6 version entries from [Unreleased] through [2026-05]
+- Includes: Profile system, monorepo support, token optimization, dynamic context, dashboard, orchestrator
+- Referenced from README.md "Getting Help" section
 
 ---
 
@@ -1125,60 +1179,116 @@ done
 
 ## Prioritization Framework
 
-### Critical (Fix Immediately)
+### ✅ Critical (COMPLETED - 4/4)
 
-1. **CLAUDE.md merge** - Affects user trust
-2. **Pre-commit hook deployment** - Already fixed, needs validation
-3. **Leftover .claude-flow/** - Simple cleanup
-4. **Config backups gitignore** - Quick fix
+1. ✅ **CLAUDE.md merge** - Affects user trust
+2. ✅ **Pre-commit hook deployment** - Already fixed, needs validation
+3. ✅ **Leftover .claude-flow/** - Simple cleanup
+4. ✅ **Config backups gitignore** - Quick fix
 
-### High Priority (Next Sprint)
+### ✅ High Priority (COMPLETED - 7/7)
 
-1. **Real token tracking** - Foundation for accurate budgeting
-2. **Bootstrap verification** - Prevents broken setups
-3. **Orchestrator retry logic** - Prevents stuck tickets
-4. **Dashboard real-time** - Core UX improvement
+1. ✅ **Real token tracking** - Foundation for accurate budgeting
+2. ✅ **Bootstrap verification** - Prevents broken setups
+3. ✅ **Orchestrator retry logic** - Prevents stuck tickets
+4. ✅ **Dashboard real-time** - Core UX improvement
+5. ✅ **Dashboard O(n) performance** - Incremental state updates
+6. ✅ **Troubleshooting guide** - User support
+7. ✅ **Documentation consolidation** - Setup guides consolidated
 
-### Medium Priority (Within 2 Sprints)
+### ✅ Medium Priority Documentation (COMPLETED - 3/3)
 
-1. **ClickUp/Linear/Jira sources** - Expands ticket system support
-2. **Agent profile improvements** - Non-destructive switching
-3. **Documentation consolidation** - Reduces confusion
-4. **Integration tests** - Quality assurance
+1. ✅ **50+ markdown files hard to navigate** - Consolidated to 4 core guides
+2. ✅ **Multiple similar docs** - Merged into ADVANCED.md
+3. ✅ **Setup guides fragmented** - Created SETUP.md, ADVANCED.md structure
 
-### Low Priority (Nice to Have)
+### 📋 Medium Priority (REMAINING - 15 issues)
 
-1. **Template library** - Phase 2 optimization
-2. **Agent marketplace** - Community features
-3. **Metrics dashboard** - Analytics enhancements
-4. **Video walkthroughs** - Improved onboarding
+**Orchestrator (3):**
+- Force-kill on halt
+- ClickUp/Linear/Jira sources
+- Stuck detection tuning
+
+**Dashboard (2):**
+- File-based inbox/outbox race conditions
+- Agent output preview
+
+**Agent System (2):**
+- Profile switching (non-destructive)
+- Performance metrics
+
+**Adoption & Bootstrap (3):**
+- Monorepo auto-detection tests
+- Adoption preview mode
+- Pre-commit config auto-selection
+
+**Token Optimization (3):**
+- Savings projections validation
+- Automatic profile detection
+- Token usage analytics
+
+**Hooks (1):**
+- Hook failure recovery
+
+**Cross-Cutting (1):**
+- Integration test suite
+
+### 📋 Low Priority (REMAINING - 15 issues)
+
+**Nice to Have:**
+- Agent version tracking
+- Profile customization
+- Session correlation improvements
+- Dashboard authentication
+- Dashboard search/filter capability
+- Template library (Phase 2 optimization)
+- Module batching
+- Graphify auto-indexing
+- Hook improvements (ticket detection regex, agency-emit config, dynamic-context docs)
+- Adopt script refactoring
+- Uninstall validation
+- ASCII diagrams → Mermaid
+- Agent marketplace (Community features)
+- Video walkthroughs (Improved onboarding)
 
 ---
 
 ## Implementation Roadmap
 
-### Phase 1: Critical Fixes (Week 1)
-- Smart CLAUDE.md merge in adopt.sh
-- Deploy pre-commit hook fix
-- Clean up .claude-flow/ and update .gitignore
-- Add config backups to .gitignore
+### ✅ Phase 1: Critical Fixes (COMPLETED)
+- ✅ Smart CLAUDE.md merge in adopt.sh
+- ✅ Deploy pre-commit hook fix
+- ✅ Clean up .claude-flow/ and update .gitignore
+- ✅ Add config backups to .gitignore
 
-### Phase 2: Core Infrastructure (Weeks 2-3)
-- Real token tracking in orchestrator
-- Bootstrap verification mode
-- Orchestrator retry logic
-- Dashboard WebSocket real-time updates
+### ✅ Phase 2: Core Infrastructure (COMPLETED)
+- ✅ Real token tracking in orchestrator
+- ✅ Bootstrap verification mode
+- ✅ Orchestrator retry logic
+- ✅ Dashboard WebSocket real-time updates
+- ✅ Dashboard incremental state updates (O(n) fix)
+- ✅ Troubleshooting guide
+- ✅ Documentation consolidation (15 files → 4 core guides)
+  - ✅ SETUP.md, ADVANCED.md, CHANGELOG.md created
+  - ✅ 15 files archived with deprecation notices
+  - ✅ All cross-references updated
 
-### Phase 3: Enhanced Experience (Weeks 4-6)
-- ClickUp/Linear/Jira ticket sources
-- Non-destructive agent profile switching
-- Integration test suite
-- Documentation consolidation
+### 📋 Phase 3: Enhanced Experience (REMAINING - 15 MEDIUM priority)
+- Orchestrator: Force-kill on halt, ClickUp/Linear/Jira sources, stuck detection tuning
+- Dashboard: File locking, agent output preview
+- Agent System: Non-destructive profile switching, performance metrics
+- Adoption: Monorepo detection tests, preview mode, pre-commit auto-selection
+- Token Optimization: Validation, automatic profile detection, usage analytics
+- Hooks: Failure recovery
+- Cross-Cutting: Integration test suite
 
-### Phase 4: Optimization & Polish (Weeks 7-8)
-- Token usage analytics
-- Agent performance metrics
-- Troubleshooting guide
+### 📋 Phase 4: Optimization & Polish (REMAINING - 15 LOW priority)
+- Agent version tracking, profile customization
+- Session correlation improvements
+- Dashboard authentication
+- Template library, module batching
+- Graphify auto-indexing
+- Hook improvements
 - Video walkthroughs
 
 ---
@@ -1196,18 +1306,44 @@ done
 
 ## Conclusion
 
-This analysis identifies **42 distinct issues** across 8 component areas, each paired with actionable solutions. The prioritization framework ensures critical user-facing issues (CLAUDE.md merge, config clarity) are addressed first, followed by infrastructure improvements (token tracking, real-time dashboard), and finally optimization features.
+This analysis identified **45 distinct issues** across 8 component areas, each paired with actionable solutions.
 
-The implementation roadmap spans 8 weeks and can be parallelized across multiple contributors by component ownership.
+**Progress Summary:**
+- ✅ **15/45 issues completed** (33% done)
+  - All 4 CRITICAL priority issues ✅
+  - All 7 HIGH priority issues ✅
+  - 3 MEDIUM priority issues ✅ (documentation consolidation)
+  - 1 LOW priority issue ✅ (changelog)
+- 📋 **30/45 issues remaining** (67%)
+  - 15 MEDIUM priority issues
+  - 15 LOW priority issues
+
+**Key Accomplishments (Phases 1-2):**
+- Smart CLAUDE.md merging prevents user config loss
+- Real token tracking with Claude Code JSON output
+- Real-time dashboard with WebSocket support
+- Incremental state updates (O(n) → O(1) performance)
+- Bootstrap verification ensures successful setup
+- Orchestrator retry logic prevents stuck tickets
+- Comprehensive troubleshooting guide
+- Documentation consolidation (15+ files → 4 core guides)
+
+**Remaining Work (Phases 3-4):**
+- **Phase 3 (15 MEDIUM):** Enhanced ticket source support, agent profile improvements, token optimization validation, dashboard UX enhancements
+- **Phase 4 (15 LOW):** Polish features, agent marketplace prep, video walkthroughs
+
+The prioritization framework successfully addressed all critical user-facing issues first (CLAUDE.md merge, config clarity), followed by infrastructure improvements (token tracking, real-time dashboard). Remaining work focuses on enhancements and polish.
 
 **Next Steps:**
-1. User reviews this design document
-2. Create implementation plan using writing-plans skill
-3. Break down into individual tickets
-4. Begin Phase 1 critical fixes
+1. ✅ ~~User reviews this design document~~
+2. ✅ ~~Create implementation plan using writing-plans skill~~
+3. ✅ ~~Break down into individual tickets~~
+4. ✅ ~~Complete Phase 1 critical fixes~~
+5. ✅ ~~Complete Phase 2 core infrastructure~~
+6. 📋 Begin Phase 3 enhanced experience (15 MEDIUM priority issues)
 
 ---
 
-**Document Status:** Draft - Awaiting user review
+**Document Status:** In Progress - 15/45 issues completed (33%)
 **Author:** Claude (Sonnet 4.5)
-**Review Required:** Yes
+**Last Review:** 2026-07-19

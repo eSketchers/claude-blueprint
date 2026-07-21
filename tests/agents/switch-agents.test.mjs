@@ -17,7 +17,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, readFileSync, lstatSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, readFileSync, lstatSync, rmSync, existsSync, readlinkSync, renameSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -64,6 +64,10 @@ function isSymlink(root, name) {
   return lstatSync(join(root, '.claude', 'agents', name)).isSymbolicLink();
 }
 
+function symlinkTarget(root, name) {
+  return readlinkSync(join(root, '.claude', 'agents', name));
+}
+
 test('first run migrates real agent files into agents-all/ and leaves only symlinks in agents/', () => {
   const root = makeProject();
   try {
@@ -79,6 +83,47 @@ test('first run migrates real agent files into agents-all/ and leaves only symli
     for (const name of active) assert.ok(isSymlink(root, name), `${name} should be a symlink, not a real file`);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('REGRESSION: symlinks are relative (../agents-all/<name>.md), not absolute — an absolute symlink bakes in this machine\'s path and breaks the moment the repo is cloned/checked out anywhere else', () => {
+  // Real bug found via CI: an earlier version of switch-agents.sh used
+  // `ln -sf "$AGENT_FILE" ...` where $AGENT_FILE was an absolute path
+  // ($PROJECT_ROOT/.claude/agents-all/<name>.md). That symlink, once
+  // committed to git, resolved fine on the machine it was created on but
+  // pointed at a nonexistent path on any other machine (e.g. a GitHub
+  // Actions runner at /home/runner/... instead of /Users/dev/...), causing
+  // `cp` (used by adopt.sh to copy these files into adopted projects) to
+  // fail outright. Fixed by symlinking to the literal relative path
+  // "../agents-all/<name>.md" instead of the resolved absolute path.
+  const root = makeProject();
+  try {
+    runSwitch(root, 'ticket');
+    for (const agent of AGENTS) {
+      const target = symlinkTarget(root, `${agent}.md`);
+      assert.equal(target, `../agents-all/${agent}.md`, `symlink target for ${agent} must be the literal relative path, not an absolute path`);
+      assert.ok(!target.startsWith('/'), `symlink target for ${agent} must not be absolute: got "${target}"`);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('REGRESSION: symlinks still resolve correctly after the whole project directory is renamed/moved (proves the relative-path fix actually works, not just that the string looks relative)', () => {
+  const root = makeProject();
+  try {
+    runSwitch(root, 'ticket');
+
+    // Simulate exactly what happens when a git-cloned repo lands at a
+    // different absolute path than where the symlink was created (e.g. CI).
+    const movedRoot = `${root}-moved`;
+    renameSync(root, movedRoot);
+
+    const content = readFileSync(join(movedRoot, '.claude', 'agents', 'backend-dev.md'), 'utf8');
+    assert.equal(content, '# backend-dev\ncontent for backend-dev\n', 'symlink must still resolve to the real content after the project directory moved');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(`${root}-moved`, { recursive: true, force: true });
   }
 });
 

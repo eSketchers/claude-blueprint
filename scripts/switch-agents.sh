@@ -105,7 +105,13 @@ for agent in $PROFILE_AGENTS; do
         continue
     fi
 
-    ln -sf "$AGENT_FILE" "$AGENTS_DIR/${agent}.md"
+    # Relative target (../agents-all/<name>.md), not $AGENT_FILE (absolute) —
+    # an absolute symlink bakes in this machine's path and breaks the moment
+    # the repo is cloned/checked out anywhere else (e.g. CI, another
+    # developer's machine, a container). agents/ and agents-all/ are always
+    # siblings directly under .claude/, so the relative path is always just
+    # one directory up.
+    ln -sf "../agents-all/${agent}.md" "$AGENTS_DIR/${agent}.md"
     echo -e "    ${GREEN}✓ $agent${NC}"
 done
 

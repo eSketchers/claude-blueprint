@@ -1,1 +1,1 @@
-/Users/mac/work/claude-agency-blueprint/.claude/agents-all/data-engineer.md
+../agents-all/data-engineer.md

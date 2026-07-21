@@ -1,1 +1,1 @@
-/Users/mac/work/claude-agency-blueprint/.claude/agents-all/frontend-dev.md
+../agents-all/frontend-dev.md

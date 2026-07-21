@@ -1,1 +1,1 @@
-/Users/mac/work/claude-agency-blueprint/.claude/agents-all/qa-lead.md
+../agents-all/qa-lead.md

@@ -1,1 +1,1 @@
-/Users/mac/work/claude-agency-blueprint/.claude/agents-all/architect.md
+../agents-all/architect.md

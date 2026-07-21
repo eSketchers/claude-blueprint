@@ -14,6 +14,51 @@
       "assignee": null,
       "limit": 30,
       "repo_path": "/absolute/path/to/your/local/clone"
+    },
+    {
+      "type": "beads",
+      "name": "example-beads",
+      "enabled": false,
+      "_comment": "Requires the `bd` CLI (brew install beads) and a `.beads/` DB already initialized in repo_path (bd init). Pulls `bd ready --json` — dependency-blocked issues are excluded automatically. beads_dir overrides BEADS_DIR if the DB lives outside repo_path; omit to let bd discover it from repo_path.",
+      "repo_path": "/absolute/path/to/your/local/clone",
+      "beads_dir": null,
+      "limit": 30
+    },
+    {
+      "type": "clickup",
+      "name": "example-clickup",
+      "enabled": false,
+      "_comment": "Requires a ClickUp API token (ClickUp -> Settings -> Apps -> API Token, starts with 'pk_') exported as the env var named in api_token_env — never put the raw token in this file. team_id is the numeric workspace ID (GET https://api.clickup.com/api/v2/team with your token, or read it from the workspace URL). Pulls team-wide via GET /team/{team_id}/task, paginated 100/page.",
+      "team_id": "your-numeric-team-id",
+      "api_token_env": "CLICKUP_API_TOKEN",
+      "status_filter": ["open", "in progress"],
+      "assignee": null,
+      "include_closed": false,
+      "limit": 30,
+      "repo_path": "/absolute/path/to/your/local/clone"
+    },
+    {
+      "type": "linear",
+      "name": "example-linear",
+      "enabled": false,
+      "_comment": "Requires a Linear personal API key (Linear -> Settings -> Account -> Security & access -> Personal API keys, starts with 'lin_api_') exported as the env var named in api_key_env. team_key is the team's short prefix used in issue identifiers (e.g. 'ENG' in ENG-123). Omit team_key/state_name to pull all non-filtered issues.",
+      "api_key_env": "LINEAR_API_KEY",
+      "team_key": "ENG",
+      "state_name": null,
+      "limit": 30,
+      "repo_path": "/absolute/path/to/your/local/clone"
+    },
+    {
+      "type": "jira",
+      "name": "example-jira",
+      "enabled": false,
+      "_comment": "Requires a Jira Cloud API token (id.atlassian.com -> Security -> API tokens) plus the Atlassian account email that generated it, in separate env vars named by email_env/api_token_env. base_url is your Jira Cloud site, e.g. https://your-domain.atlassian.net. jql defaults to 'statusCategory != Done' if omitted.",
+      "base_url": "https://your-domain.atlassian.net",
+      "email_env": "JIRA_EMAIL",
+      "api_token_env": "JIRA_API_TOKEN",
+      "jql": "project = ENG AND statusCategory != Done",
+      "limit": 30,
+      "repo_path": "/absolute/path/to/your/local/clone"
     }
   ],
 

@@ -28,6 +28,11 @@ The daemon that closes the loop between your ticket system and autonomous agent 
 | `notifier.mjs` | Slack webhook + console fallback. |
 | `spawn.mjs` | Launches headless Claude Code sessions. |
 | `sources/github.mjs` | GitHub Issues poller via `gh` CLI. |
+| `sources/filesystem.mjs` | Picks up tickets from JSON files dropped in a local directory. |
+| `sources/beads.mjs` | Pulls ready (unblocked) issues from a [beads](https://github.com/gastownhall/beads) (`bd`) dependency graph. |
+| `sources/clickup.mjs` | ClickUp task poller via the v2 REST API. |
+| `sources/linear.mjs` | Linear issue poller via the GraphQL API. |
+| `sources/jira.mjs` | Jira issue poller via JQL search (REST API v3). |
 
 State lives at `~/.claude-agency/`:
 
@@ -50,7 +55,39 @@ cp config/orchestrator.example.json config/orchestrator.json
 
 Key config:
 
-- `sources[]` — each entry polls a source. GitHub supported today; pattern generalizes.
+- `sources[]` — each entry polls a source (`type`: `github`, `filesystem`, `beads`, `clickup`, `linear`, or `jira`). Every source maps into the same normalized ticket shape, so the rest of the orchestrator (registry, spawn, stuck-detection) doesn't care where a ticket came from.
+
+### ClickUp source setup
+
+1. Generate a personal API token: ClickUp → your avatar → **Settings** → **Apps** → **API Token** (starts with `pk_`).
+2. Export it as an env var — never put the raw token in `config/orchestrator.json`:
+   ```bash
+   export CLICKUP_API_TOKEN='pk_...'
+   ```
+3. Find your numeric team (workspace) ID: `curl -s -H "Authorization: $CLICKUP_API_TOKEN" https://api.clickup.com/api/v2/team` and read `teams[0].id`.
+4. Set `team_id` and `api_token_env` (the *name* of the env var, not the token itself) in the source config. `status_filter` and `assignee` are optional; omitting `status_filter` returns all non-closed tasks in the workspace.
+
+Pulls team-wide via `GET /team/{team_id}/task`, paginated 100 tasks/page. Read-only — unlike the `beads` source, there's no claim/close write-back to ClickUp; a task naturally drops out of future polls once you move it out of `status_filter`'s statuses in ClickUp itself.
+
+### Beads source setup
+
+Requires the `bd` CLI (`brew install beads`) and a `.beads/` database already initialized in the target repo (`bd init`). Pulls `bd ready --json` — tasks blocked on unmet dependencies are excluded automatically by beads itself. On ticket claim, the orchestrator calls `bd update <id> --claim`; on completion, `bd close <id> --reason ...` — so beads' own graph stays in sync with what the orchestrator did, and closed/claimed tickets won't resurface on the next `bd ready` poll.
+
+### Linear source setup
+
+1. Generate a personal API key: Linear → **Settings** → **Account** → **Security & access** → **Personal API keys**.
+2. Export it: `export LINEAR_API_KEY='lin_api_...'`.
+3. Set `api_key_env` (the env var *name*) plus optionally `team_key` (a team's short prefix, e.g. `ENG` from issue IDs like `ENG-123`) and `state_name` (an exact workflow state name, e.g. `Todo`) to filter.
+
+Read-only, cursor-paginated via Linear's GraphQL API. No claim/close write-back to Linear.
+
+### Jira source setup
+
+1. Generate an API token: [id.atlassian.com](https://id.atlassian.com) → **Security** → **API tokens**.
+2. Export both the token and the Atlassian account email that generated it, in two separate env vars: `export JIRA_API_TOKEN='...'` and `export JIRA_EMAIL='you@company.com'`.
+3. Set `base_url` (your Jira Cloud site, e.g. `https://your-domain.atlassian.net`), `email_env`, `api_token_env`, and optionally `jql` (defaults to `statusCategory != Done`) to scope which issues are pulled.
+
+Read-only, `startAt`-paginated via JQL search on REST API v3. No claim/close write-back to Jira. Note: this module was verified against a real, public Jira Server/Data Center instance during development (no Cloud account was available to test against) — Cloud v3's `description` field can render as an Atlassian Document Format object rather than plain text on some instances; this module treats a non-string description as empty rather than guessing at ADF-to-text conversion.
 - `budget.daily_usd_cap` + `per_ticket_usd_cap` — hard ceilings. Exceeding halts spawns.
 - `budget.cost_per_event_usd` — rough proxy for token spend. This is a **circuit breaker, not billing** — tune after observing real cost.
 - `spawn.dry_run: true` — prints the would-be command without executing. Leave enabled while tuning config.

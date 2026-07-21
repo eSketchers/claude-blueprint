@@ -18,6 +18,7 @@ Reusable Claude Code baseline for all agency projects. Clone into a new project 
 | **MCP** | github | PRs / issues |
 | **CLI** | [ast-grep](https://ast-grep.github.io/) | Structural refactors |
 | **Hooks** | pre-commit + Flake8 / ESLint / Prettier | Lint on commit |
+| **Optional** | [beads](https://github.com/gastownhall/beads) | Dependency-graph task tracker (orchestrator source) |
 
 ## Quick Start
 
@@ -185,7 +186,7 @@ cp config/orchestrator.example.json config/orchestrator.json    # edit: sources,
 
 What it does every tick (default 60s):
 
-1. **Polls sources** (GitHub via `gh` CLI in v1; ClickUp/Linear drop-in)
+1. **Polls sources** — GitHub (`gh` CLI), local filesystem, ClickUp, Linear, Jira, or [beads](https://github.com/gastownhall/beads) (dependency-graph task tracker); see `orchestrator/README.md` for setup per source
 2. **Spawns a headless Claude Code session per new ticket** — runs `/ticket <url> --auto`
 3. **Tails** `~/.claude-agency/events.jsonl` for blocker / completion events from every session
 4. **Enforces budget** — per-ticket cap, daily cap, kill-switch via `touch ~/.claude-agency/KILLSWITCH`
@@ -235,11 +236,11 @@ You don't call the dashboard from your prompts. Just use `claude` in your projec
 
 **3. When an agent lands in "Meeting Room," reply from the dashboard.**
 
-If you kick off a longer task (especially anything using `/ticket` or a subagent that calls `/wait-for-reply`) and it needs your input, you don't have to keep the terminal in focus. Just glance at the dashboard, click the blocked agent's card in **Meeting Room**, type your answer, and submit. The agent picks it up and keeps going — no need to switch back to the terminal at the exact right moment.
+If you kick off a longer task (especially anything using `/ticket` or a subagent that calls `/wait-for-reply`) and it needs your input, you don't have to keep the terminal in focus. Just glance at the dashboard, click the blocked agent's card in **Meeting Room**, type your answer, and submit. The agent picks it up and keeps going — no need to switch back to the terminal at the exact right moment. (See "Self-resume" above, or `dashboard/README.md`, for how `/wait-for-reply` and the inbox handoff work under the hood.)
 
 **4. Use `/check-inbox` if you're back at the terminal and want to check for a reply yourself.**
 
-If you're already in the Claude Code session and want to see whether you (or a teammate) left a reply via the dashboard, just ask Claude to run `/check-inbox` — it's non-blocking, so it either surfaces the reply or tells you there's nothing waiting, no delay either way.
+If you're already in the Claude Code session and want to see whether you (or a teammate) left a reply via the dashboard, just ask Claude to run `/check-inbox` — it's non-blocking, so it either surfaces the reply or tells you there's nothing waiting, no delay either way. Full loop explained in `dashboard/README.md`.
 
 **5. Multiple projects open at once? One dashboard covers all of them.**
 
@@ -248,6 +249,54 @@ The dashboard isn't per-project — it watches `~/.claude-agency/events.jsonl`, 
 **6. Don't worry about the orchestrator unless you actually want unattended automation.**
 
 The dashboard works fully standalone — it doesn't require `orchestrator/` to be running. Only set up the orchestrator (see below) if you want tickets picked up automatically without you starting each session by hand; for day-to-day interactive use, the dashboard + your normal `claude` sessions is all you need.
+
+**7. If you do turn on the orchestrator, we recommend feeding it from beads rather than a plain issue tracker.**
+
+The orchestrator can pull tickets from GitHub, ClickUp, Linear, or Jira, but none of those understand *dependencies* between tasks — it'll happily try to spawn an agent on a ticket that's blocked on another one not being done yet. [beads](https://github.com/gastownhall/beads) (`bd`) is a small, purpose-built dependency-graph task tracker: it only ever reports a task as "ready" once everything it depends on is closed. For unattended automation specifically — which is the whole point of running the orchestrator — that's a meaningfully better fit than a flat issue list, so it's the source we'd suggest reaching for first.
+
+Setup:
+
+```bash
+# 1. Install the bd CLI
+brew install beads   # or: npm install -g @beads/bd
+
+# 2. Initialize a beads database in your project (run once, from the repo root)
+# --stealth is important here: plain `bd init` also auto-commits its own
+# files to git and installs its own CLAUDE.md section, .claude/settings.json
+# hook, and Codex integration — unreviewed, on every run. --stealth (i.e.
+# `no-git-ops: true`) skips all of that and only creates .beads/, which is
+# all the orchestrator source needs.
+cd ~/work/my-project
+bd init --quiet --stealth
+
+# 3. Quiet the one-time metrics prompt and a role warning you'll otherwise see on every bd call
+bd metrics off
+git config beads.role contributor   # or 'maintainer' if you're the primary owner
+
+# 4. Create some tasks, wiring up dependencies as needed
+bd create "Design the API schema" -p 1
+bd create "Implement the endpoint" -p 1 --label backend
+# ...then chain them: the second arg blocks the first (blocked-id first, blocker-id second)
+bd dep add <implement-endpoint-id> <design-schema-id>
+```
+
+Then point the orchestrator at it in `config/orchestrator.json`:
+
+```json
+{
+  "sources": [
+    {
+      "type": "beads",
+      "name": "my-project",
+      "enabled": true,
+      "repo_path": "/Users/you/work/my-project",
+      "limit": 30
+    }
+  ]
+}
+```
+
+Once running, the orchestrator polls `bd ready` — tasks still blocked on an open dependency are automatically excluded, so you never get an agent spawned on work that isn't actually startable yet. When an agent finishes a ticket, the orchestrator calls `bd close` for you, so beads' own graph stays accurate and the next dependent task becomes "ready" without you touching anything by hand. Full details (claim/close behavior, `BEADS_DIR` for non-standard database locations): `orchestrator/README.md`.
 
 ## Customizing per Team
 

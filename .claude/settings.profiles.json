@@ -37,7 +37,7 @@
         },
         "playwright": {
           "command": "npx",
-          "args": ["-y", "@modelcontextprotocol/server-playwright"]
+          "args": ["-y", "@playwright/mcp@latest"]
         }
       }
     },
@@ -81,7 +81,7 @@
         },
         "playwright": {
           "command": "npx",
-          "args": ["-y", "@modelcontextprotocol/server-playwright"]
+          "args": ["-y", "@playwright/mcp@latest"]
         },
         "github": {
           "command": "npx",
@@ -109,7 +109,7 @@
         },
         "playwright": {
           "command": "npx",
-          "args": ["-y", "@modelcontextprotocol/server-playwright"]
+          "args": ["-y", "@playwright/mcp@latest"]
         },
         "github": {
           "command": "npx",

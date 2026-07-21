@@ -297,41 +297,22 @@ agents.backup/
 
 ### Issue 4: ClickUp/Linear/Jira sources not implemented
 
-**Priority:** ~~MEDIUM~~ → **LOW** — downgraded 2026-07-20 by explicit user decision (see "Remaining Work" below for the current flat priority list).
+**Priority:** ~~MEDIUM~~ → ~~LOW~~ — downgraded 2026-07-20 by explicit user decision, then picked up and completed 2026-07-21/22.
+
+**Status:** ✅ COMPLETED (2026-07-21/22)
 
 **Problem:** ClickUp/Linear/Jira mentioned in docs but not implemented. (Correction 2026-07-19: the orchestrator is not strictly "GitHub-only" as originally stated — `orchestrator/sources/filesystem.mjs` already exists, picking up tickets from JSON files dropped in a local directory, for demos/offline/file-driven pipelines. It does not cover any real issue-tracker API, so ClickUp/Linear/Jira remain unimplemented.)
 
 **Location:** `orchestrator/sources/`
 
-**Solution:**
-- Implement `sources/clickup.mjs` following github.mjs pattern
-- Implement `sources/linear.mjs`
-- Implement `sources/jira.mjs`
-- Document API token setup for each in orchestrator/README.md
-- Add example configs to orchestrator.example.json
+**What was implemented:**
+- `sources/clickup.mjs` — `fetchClickUp(cfg)`, polling ClickUp's v2 REST API (`GET /team/{team_id}/task`, team-scoped, no space/list ID needed). Built and empirically verified against a real live ClickUp workspace (real API token, real tasks) during development — confirmed exact pagination behavior (`page=N` + `last_page` boolean, not the design doc's guessed shape), that `statuses[]`/`assignees[]` must be repeated query params (not comma-joined), and real 401 behavior on a bad token. The design doc's own `Implementation Pattern` sketch above was not usable as-is: `fetch()` doesn't take a `params` option, and it never called `.json()` on the response.
+- `sources/linear.mjs` — `fetchLinear(cfg)`, polling Linear's GraphQL API. Linear's docs were unavailable/redirected during development, so the schema (issue `identifier`/`url`/`state.name`/`labels.nodes.name`, `IssueFilter.team.key.eq`, Relay-style `pageInfo.hasNextPage`/`endCursor` pagination) was confirmed via a live, unauthenticated introspection query directly against `https://api.linear.app/graphql` — real, current schema, not guessed. A fake API key against the real endpoint also confirmed auth failures return an actual HTTP 401 with a GraphQL `errors[]` body.
+- `sources/jira.mjs` — `fetchJira(cfg)`, polling Jira Cloud's REST API v3 `/search` endpoint with JQL, Basic auth (email + API token, base64). Verified the response envelope and per-issue field shape (`key`, `fields.summary`, `fields.labels` as a plain string array, `fields.status.name`) against a real, public, live Jira instance (issues.apache.org) — that instance is Jira Server/Data Center on the v2 endpoint, not Cloud v3, since no private Cloud account was available; this is flagged explicitly in the module's own header comment and README rather than silently assumed identical. Known, documented gap: Jira Cloud v3 can return `fields.description` as an Atlassian Document Format object rather than a plain string on modern instances — this module treats any non-string description as absent (empty string) rather than guess at ADF-to-text extraction.
+- All three wired into `orchestrator/server.mjs`'s `intakeTick()` source dispatch (`type: 'clickup'|'linear'|'jira'`), alongside the existing `github`/`filesystem`/`beads` types. All three are read-only (no claim/close write-back) — unlike the `beads` source, none of ClickUp/Linear/Jira have a dependency-graph concept the orchestrator needs to keep in sync; a ticket naturally stops being re-polled once its status changes in the tracker itself (via each source's own status/JQL filter).
+- Documented in `orchestrator/README.md` (new "ClickUp/Linear/Jira source setup" subsections with exact token-generation steps) and `config/orchestrator.example.json` (disabled-by-default example entries for all three, tokens always referenced by env-var name, never inline).
 
-**Implementation Pattern:**
-```javascript
-// sources/clickup.mjs
-export async function fetchClickUp(config) {
-  const response = await fetch(
-    `https://api.clickup.com/api/v2/team/${config.team_id}/task`,
-    {
-      headers: { 'Authorization': config.api_token },
-      params: { 'statuses[]': config.status_filter }
-    }
-  );
-
-  return response.tasks.map(t => ({
-    id: t.id,
-    title: t.name,
-    url: t.url,
-    labels: t.tags.map(tag => tag.name),
-    source: 'clickup',
-    source_name: config.name
-  }));
-}
-```
+**Tests:** `tests/orchestrator/clickup-source.test.mjs` (13 tests), `tests/orchestrator/linear-source.test.mjs` (10 tests), `tests/orchestrator/jira-source.test.mjs` (12 tests) — 35 total, all mocking `global.fetch` (no CLI binary to shim, unlike the beads source) using response shapes copied from real API calls/introspection rather than invented. Covers shape mapping, pagination (page-number, cursor, and startAt styles respectively), limit-truncation short-circuiting further page fetches, filter/query construction, and error paths (bad auth, network failure, malformed JSON, missing config). All pass: `node --test tests/orchestrator/clickup-source.test.mjs tests/orchestrator/linear-source.test.mjs tests/orchestrator/jira-source.test.mjs`.
 
 ---
 
@@ -1278,8 +1259,8 @@ Neither was backed by an actual script — both were pure prompt instructions to
 - Adoption: preview mode (real diff)
 - Adoption: pre-commit auto-selection
 
-### 📋 Then: LOW priority (18 issues, no fixed order — pick by convenience/interest)
-- Orchestrator: ClickUp/Linear/Jira sources, session→ticket correlation
+### 📋 Then: LOW priority (16 issues remaining, no fixed order — pick by convenience/interest)
+- Orchestrator: session→ticket correlation
 - Dashboard: authentication, search/filter
 - Hooks: ticket-detection regex coverage, dynamic-context.sh docs (or removal — it's dead code, not wired into settings.json), agency-emit.sh session-type gating
 - Agent System: profile customization (un-hardcode from JSON), version tracking, superpowers symlink pinning
@@ -1305,14 +1286,14 @@ Neither was backed by an actual script — both were pure prompt instructions to
 This analysis identified **45 distinct issues** across 8 component areas, each paired with actionable solutions.
 
 **Progress Summary:**
-- ✅ **28/45 issues completed** (62% done)
+- ✅ **29/45 issues completed** (64% done)
   - All 4 CRITICAL priority issues ✅
   - All 7 HIGH priority issues ✅
   - 3 MEDIUM priority issues ✅ (documentation consolidation)
   - 1 LOW priority issue ✅ (changelog)
-  - 13 additional fixes ✅ (2026-07-19 to 2026-07-21): force-kill on halt; hook failure recovery; stuck-detection whitelist [partial]; inbox/outbox race conditions; integration test suite; monorepo detection tests [partial]; non-destructive agent profile switching; automatic profile detection; dashboard agent output preview; agent performance metrics [scoped]; adoption preview mode; pre-commit config auto-selection override (every remaining MEDIUM-priority issue, closed 2026-07-20); graphify incremental hooks (2026-07-21, first LOW-priority pickup)
+  - 14 additional fixes ✅ (2026-07-19 to 2026-07-22): force-kill on halt; hook failure recovery; stuck-detection whitelist [partial]; inbox/outbox race conditions; integration test suite; monorepo detection tests [partial]; non-destructive agent profile switching; automatic profile detection; dashboard agent output preview; agent performance metrics [scoped]; adoption preview mode; pre-commit config auto-selection override (every remaining MEDIUM-priority issue, closed 2026-07-20); graphify incremental hooks (2026-07-21, first LOW-priority pickup); ClickUp/Linear/Jira orchestrator sources (2026-07-21/22, second LOW-priority pickup — plus a `beads` (gastownhall/beads) dependency-graph source added as an unplanned extra, same session)
   - Plus 2 pre-existing `adopt.sh` bugs found during the integration-test work, fixed as a same-week follow-up (2026-07-20) — not separately numbered issues, but folded into Cross-Cutting Issue 5's completion
-- 📋 **17/45 issues remaining** (38%), **all LOW priority** — 3 of these were explicitly downgraded from MEDIUM 2026-07-20 by user decision (see below)
+- 📋 **16/45 issues remaining** (36%), **all LOW priority** — 2 of these were explicitly downgraded from MEDIUM 2026-07-20 by user decision (see below); the third downgraded issue (ClickUp/Linear/Jira sources) is now complete
 
 **Key Accomplishments (Critical/High priority work):**
 - Smart CLAUDE.md merging prevents user config loss
@@ -1349,9 +1330,13 @@ This analysis identified **45 distinct issues** across 8 component areas, each p
 **Key Accomplishments (2026-07-21 — first LOW-priority pickup):**
 - Graphify incremental hooks: found the vendored `graphify` tool already ships a mature `graphify hook install` subcommand — installs both post-commit AND post-checkout git hooks (better than the original spec's post-commit-only ask), idempotent, respects `core.hooksPath`, calls an AST-only no-LLM per-file-cached rebuild. `adopt.sh` never called it. Wired it in with a `--no-graphify-hook` opt-out, non-fatal if graphify isn't installed or the hook-install command fails. Also corrected `docs/ADVANCED.md`, which already explained *why* incremental hooks were practical but never mentioned one was actually available. Verified via a Python-3.9-compatibility monkeypatch of the real vendored hook-install logic (this environment's Python predates graphify's own `>=3.10` requirement) plus a shell-script mock `graphify` binary for the automated test suite.
 
+**Key Accomplishments (2026-07-21/22 — second LOW-priority pickup):**
+- ClickUp/Linear/Jira orchestrator sources: all three implemented against real, empirically-verified API behavior rather than the design doc's own (buggy) sketch — see Orchestrator Issue 4's full writeup above for exactly what was verified against a live ClickUp workspace, live Linear GraphQL introspection, and a real public Jira instance, and what remains an documented, flagged gap (Jira Cloud v3's ADF description field, untested against a real Cloud account). 35 new mocked-`fetch` tests across the three sources.
+- Unplanned addition, same session: a `beads` (gastownhall/beads) source was also built — not one of the 45 originally-tracked issues, added because the user asked about integrating beads as a task-graph backend. Includes claim/close write-back to beads' own graph (unlike ClickUp/Linear/Jira, which are read-only), verified end-to-end against a real local `bd` install, plus a mocked-binary test suite.
+
 **Remaining Work (see "Remaining Work — Flat Priority List" above for the full list with rationale):**
 - **MEDIUM: none remaining.** All 4 issues confirmed important by the user on 2026-07-20 are now complete.
-- **LOW (17 issues, no fixed order):** ClickUp/Linear/Jira sources, token analytics/savings validation, dashboard auth/search, agent version tracking/profile customization, adopt.sh cleanup, template library, docs polish.
+- **LOW (16 issues, no fixed order):** token analytics/savings validation, dashboard auth/search, agent version tracking/profile customization, adopt.sh cleanup, template library, docs polish.
 
 **Next Steps:**
 1. ✅ ~~User reviews this design document~~
@@ -1369,6 +1354,6 @@ This analysis identified **45 distinct issues** across 8 component areas, each p
 
 ---
 
-**Document Status:** In Progress - 28/45 issues completed (62%); remaining 17 issues, all LOW priority, as of 2026-07-21 (the risk-ranked Tier 0–6 system used 2026-07-19 to 2026-07-20 has been retired; all 4 confirmed-important MEDIUM issues completed 2026-07-20; first LOW-priority item — graphify incremental hooks — completed 2026-07-21); full test suite 143/143 green
+**Document Status:** In Progress - 29/45 issues completed (64%); remaining 16 issues, all LOW priority, as of 2026-07-22 (the risk-ranked Tier 0–6 system used 2026-07-19 to 2026-07-20 has been retired; all 4 confirmed-important MEDIUM issues completed 2026-07-20; first LOW-priority item — graphify incremental hooks — completed 2026-07-21; second LOW-priority item — ClickUp/Linear/Jira sources, plus an unplanned `beads` source — completed 2026-07-21/22); full test suite 194/194 green
 **Author:** Claude (Sonnet 4.5)
 **Last Review:** 2026-07-21

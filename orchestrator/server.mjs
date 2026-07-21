@@ -19,6 +19,10 @@ import { Notifier }        from './notifier.mjs';
 import { spawnTicketAgent } from './spawn.mjs';
 import { fetchGithub }     from './sources/github.mjs';
 import { fetchFilesystem, archiveFilesystemTicket } from './sources/filesystem.mjs';
+import { fetchBeads, claimBeadsTicket, closeBeadsTicket } from './sources/beads.mjs';
+import { fetchClickUp }    from './sources/clickup.mjs';
+import { fetchLinear }     from './sources/linear.mjs';
+import { fetchJira }       from './sources/jira.mjs';
 import { detectStuck }     from './stuck-detector.mjs';
 import { buildDigest, formatMarkdown } from './digest.mjs';
 import { RetryManager }    from './retry-manager.mjs';
@@ -113,6 +117,10 @@ async function intakeTick() {
     try {
       if (src.type === 'github')     tickets = await fetchGithub(src);
       else if (src.type === 'filesystem') tickets = await fetchFilesystem(src);
+      else if (src.type === 'beads')      tickets = await fetchBeads(src);
+      else if (src.type === 'clickup')    tickets = await fetchClickUp(src);
+      else if (src.type === 'linear')     tickets = await fetchLinear(src);
+      else if (src.type === 'jira')       tickets = await fetchJira(src);
       else {
         console.warn(`[intake] unknown source type: ${src.type}`);
         continue;
@@ -135,6 +143,15 @@ async function intakeTick() {
         repo_path:   t.repo_path,
         labels:      t.labels,
       };
+      // Carry beads' own issue id + db location through the registry so the
+      // 'done' transition in onEvent() can call closeBeadsTicket() later —
+      // registry.get() only ever returns what was persisted here, so these
+      // fields must be saved now even though they're only used at close time.
+      if (t.source === 'beads') {
+        reg._bd_id = t._bd_id;
+        reg._repo_path = t._repo_path;
+        reg._beads_dir = t._beads_dir;
+      }
       registry.claim(t.id, reg);
 
       console.log(`[intake] claimed ${t.id} — "${t.title}"`);
@@ -183,6 +200,11 @@ async function intakeTick() {
       // Archive filesystem tickets so we don't re-claim them next tick
       if (t.source === 'filesystem') {
         try { await archiveFilesystemTicket(t); } catch {/* non-fatal */}
+      }
+
+      // Reflect the claim in beads' own graph so `bd ready` won't resurface it.
+      if (t.source === 'beads') {
+        try { await claimBeadsTicket(t); } catch (e) { console.error(`[intake] bd claim failed for ${t.id}:`, e.message); }
       }
     }
   }
@@ -284,6 +306,10 @@ function onEvent(ev) {
         ticket_id: ticketId,
         link: prev.url,
       });
+      if (prev.source === 'beads') {
+        closeBeadsTicket(prev, 'completed by agent').catch(e =>
+          console.error(`[event] bd close failed for ${ticketId}:`, e.message));
+      }
     } else {
       // Let stuckTick pick it up with the 'stopped_no_changes' rule.
       registry.update(ticketId, { pending_stop: true });

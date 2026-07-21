@@ -10,10 +10,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Configure git identity (needed by tests that create commits in scratch repos)
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI Runner"
 
       - name: Install dashboard dependencies (ws)
         working-directory: dashboard
@@ -26,6 +33,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure git identity (needed by test-adopt.sh's scratch repos)
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI Runner"
 
       - name: Install jq
         run: sudo apt-get update -qq && sudo apt-get install -y -qq jq

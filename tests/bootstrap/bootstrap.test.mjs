@@ -74,19 +74,33 @@ test('bootstrap.sh: --strict and --permissive are mutually overriding (last one 
   assert.equal(permissiveLast.status, 0);
 });
 
-test('bootstrap.sh: requires the claude CLI to be present, failing fast with a clear message if not', () => {
-  // Simulate a machine without the `claude` CLI on PATH by giving the
-  // subprocess a PATH with only enough to run bash itself.
+test('bootstrap.sh --dry-run: does NOT require the claude CLI to be present (fixed — dry-run previews without needing tools pre-installed)', () => {
+  // Regression test for a real bug found via CI: bootstrap.sh used to check
+  // `command -v claude` unconditionally, before even looking at --dry-run,
+  // so `--dry-run` failed outright on any machine (or CI runner) without
+  // Claude Code already installed — exactly the situation --dry-run exists
+  // to support (previewing an install before anything is set up). Fixed by
+  // gating the claude/npx prerequisite checks on `[[ "$DRY_RUN" == "false" ]]`.
   const result = spawnSync(BOOTSTRAP, ['--dry-run'], {
     encoding: 'utf8',
     timeout: 10_000,
-    env: { PATH: '/usr/bin:/bin' }, // no claude, likely no npx either depending on host
+    env: { PATH: '/usr/bin:/bin' }, // simulates a machine with neither claude nor npx on PATH
   });
-  // We only assert the specific claude-missing failure mode when claude is
-  // indeed absent from that trimmed PATH — otherwise this assertion would be
-  // host-dependent. Skip cleanly if the trimmed PATH still finds a claude binary.
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stderr, /claude CLI not found/);
+  assert.doesNotMatch(result.stderr, /npx not found/);
+});
+
+test('bootstrap.sh (real run, no --dry-run): still requires the claude CLI, failing fast with a clear message if not', () => {
+  // The prerequisite check must still apply to a REAL install — only
+  // --dry-run is exempt. Simulate a machine without `claude` on PATH.
+  const result = spawnSync(BOOTSTRAP, [], {
+    encoding: 'utf8',
+    timeout: 10_000,
+    env: { PATH: '/usr/bin:/bin' },
+  });
   const claudeStillFound = spawnSync('command', ['-v', 'claude'], { shell: '/bin/bash', encoding: 'utf8', env: { PATH: '/usr/bin:/bin' } }).status === 0;
-  if (claudeStillFound) return;
+  if (claudeStillFound) return; // host-dependent escape hatch, same as before
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /claude CLI not found/);

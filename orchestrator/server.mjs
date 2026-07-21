@@ -22,6 +22,7 @@ import { fetchFilesystem, archiveFilesystemTicket } from './sources/filesystem.m
 import { detectStuck }     from './stuck-detector.mjs';
 import { buildDigest, formatMarkdown } from './digest.mjs';
 import { RetryManager }    from './retry-manager.mjs';
+import { Killer }          from './killer.mjs';
 
 const CONFIG_PATH = process.env.AGENCY_ORCH_CONFIG || resolve('config/orchestrator.json');
 const HOME        = process.env.CLAUDE_AGENCY_HOME || join(homedir(), '.claude-agency');
@@ -45,6 +46,12 @@ const notifier = new Notifier(config.notifier || {});
 const stuckCfg = config.stuck || {};
 const retryManager = new RetryManager(config.retry || {});
 const retryQueue = new Map(); // ticketId -> timeoutId
+
+const killer = new Killer({
+  registry,
+  notifier,
+  graceMs: Number(config.budget?.kill_grace_ms ?? 30_000),
+});
 
 // In-memory sliding window of recent events per ticket + last stuck notification time.
 // Lost on restart — idle-rule still works off persisted last_event_at.
@@ -250,6 +257,7 @@ function onEvent(ev) {
         ticket_id: ticketId,
       });
     }
+    if (prev?.spawned_pid) killer.kill(ticketId, prev.spawned_pid, halt.reason);
   }
 
   // Blocker notification (explicit, via /wait-for-reply)
@@ -390,6 +398,7 @@ async function tick() {
     await intakeTick();
     tailEvents();
     stuckTick();
+    killer.sweep(budget);
     await digestTick();
     const warn = budget.checkThresholds();
     if (warn?.warn) await notifier.notify('budget_cap', { title: warn.reason });

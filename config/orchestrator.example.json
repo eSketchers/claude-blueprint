@@ -24,10 +24,12 @@
     "_comment_4": "thrashing_window: last N events, no Edit/Write -> stuck:thrashing",
     "_comment_5": "stopped_no_changes: Stop fires but ticket never touched a file -> asked-and-returned",
     "_comment_6": "re_notify_after_ms: throttle repeat Slack pings for the same stuck reason",
+    "_comment_7": "whitelist: glob patterns (* wildcard) matched against the ticket id and its labels — tickets that match are never flagged stuck. Use for long research spikes, infra tasks, etc. Examples: 'gh:your-org/your-repo#42', 'long-running', 'research-*'",
     "idle_timeout_ms": 600000,
     "tool_loop_threshold": 5,
     "thrashing_window": 50,
-    "re_notify_after_ms": 600000
+    "re_notify_after_ms": 600000,
+    "whitelist": []
   },
 
   "budget": {
@@ -35,7 +37,9 @@
     "daily_usd_cap": 25,
     "per_ticket_usd_cap": 2,
     "cost_per_event_usd": 0.001,
-    "killswitch_file": "~/.claude-agency/KILLSWITCH"
+    "killswitch_file": "~/.claude-agency/KILLSWITCH",
+    "kill_grace_ms": 30000,
+    "_comment_kill": "kill_grace_ms: on halt (killswitch or cap), SIGTERM the spawned agent's process group, then SIGKILL after this many ms if it hasn't exited."
   },
 
   "retry": {

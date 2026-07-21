@@ -22,10 +22,13 @@ DETECT=0
 PROFILE=""
 FORCE=0
 NO_PRECOMMIT=0
+NO_GRAPHIFY_HOOK=0
 DRY_RUN=0
 ACTION="adopt"   # adopt | uninstall | doctor
 QUIET=0
 MERGE_STRATEGY="merge"  # merge | overwrite | backup-only
+PRECOMMIT_TEMPLATE=""   # "" (auto-detect, default) | python | node | merged
+SHOW_DIFF=0
 
 usage() {
   cat <<'USAGE'
@@ -37,19 +40,29 @@ Framework options (one required):
   --detect            Auto-detect all frameworks in the repo.
 
 Other options:
-  --profile P         'backend' merges a stricter deny-list. Default for python/nestjs.
-  --force             Overwrite existing .claude/. Moves it to .claude.bak-<ts>/.
-  --no-precommit      Skip `pre-commit install`.
-  --merge-strategy S  How to handle existing CLAUDE.md: merge|overwrite|backup-only (default: merge).
-  --dry-run           Print every op, change nothing.
-  --uninstall         Remove everything adopt created, restore .gitignore.
-  --doctor [--quiet]  Health-check: validate marker and symlinks.
-  -h, --help          This help.
+  --profile P             'backend' merges a stricter deny-list. Default for python/nestjs.
+  --force                 Overwrite existing .claude/. Moves it to .claude.bak-<ts>/.
+  --no-precommit          Skip `pre-commit install`.
+  --precommit-template T  Override auto-selected pre-commit config. T = python|node|merged.
+                          Default: auto-detected from framework(s) (single -> python/node,
+                          2+ mixed -> merged). Use this to force a template that doesn't
+                          match detection, e.g. a Python-only repo that also wants Node linters.
+  --no-graphify-hook      Skip installing graphify's post-commit/post-checkout git hooks
+                          (incremental, no-LLM knowledge-graph rebuild after each commit).
+  --merge-strategy S      How to handle existing CLAUDE.md: merge|overwrite|backup-only (default: merge).
+  --dry-run               Print every op, change nothing.
+  --diff                  With --dry-run: show a real diff for files that would be modified
+                          (CLAUDE.md, .gitignore, .pre-commit-config.yaml), not just "would create/modify".
+  --uninstall             Remove everything adopt created, restore .gitignore.
+  --doctor [--quiet]      Health-check: validate marker and symlinks.
+  -h, --help              This help.
 
 Examples:
   adopt.sh --framework python                    # Single framework (legacy)
   adopt.sh --frameworks "python,nextjs"          # Monorepo (Django + Next.js)
   adopt.sh --detect                              # Auto-detect all frameworks
+  adopt.sh --dry-run --diff                      # Preview exactly what would change
+  adopt.sh --framework python --precommit-template merged  # Force merged config
 USAGE
 }
 
@@ -71,12 +84,19 @@ while [[ $# -gt 0 ]]; do
     --profile)     PROFILE="${2:?}"; shift 2 ;;
     --force)       FORCE=1; shift ;;
     --no-precommit) NO_PRECOMMIT=1; shift ;;
+    --no-graphify-hook) NO_GRAPHIFY_HOOK=1; shift ;;
+    --precommit-template)
+      PRECOMMIT_TEMPLATE="${2:?}"
+      [[ "$PRECOMMIT_TEMPLATE" =~ ^(python|node|merged)$ ]] || die "Invalid --precommit-template: $PRECOMMIT_TEMPLATE (must be python|node|merged)"
+      shift 2
+      ;;
     --merge-strategy)
       MERGE_STRATEGY="${2:?}"
       [[ "$MERGE_STRATEGY" =~ ^(merge|overwrite|backup-only)$ ]] || die "Invalid --merge-strategy: $MERGE_STRATEGY (must be merge|overwrite|backup-only)"
       shift 2
       ;;
     --dry-run)     DRY_RUN=1; shift ;;
+    --diff)        SHOW_DIFF=1; shift ;;
     --uninstall)   ACTION="uninstall"; shift ;;
     --doctor)      ACTION="doctor"; shift ;;
     --quiet)       QUIET=1; shift ;;
@@ -86,12 +106,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ---------- Resolve mode + blueprint dir ----------
-SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT_BLUEPRINT="$(cd "$SCRIPT_PATH/.." && pwd)"
+# Use `pwd -P` (physical path, symlinks resolved) rather than plain `pwd`
+# (logical path, as-typed) so this matches PROJECT_ROOT below. `git
+# rev-parse --show-toplevel` always canonicalizes through symlinks — on
+# macOS, the OS temp dir (and other paths) are commonly reached through a
+# symlink (e.g. /var -> /private/var), so a logical-vs-physical mismatch
+# here would make "$SCRIPT_PATH" == "$PROJECT_ROOT/.agency/scripts" silently
+# fail to match even when the nested layout is exactly correct.
+SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+SCRIPT_BLUEPRINT="$(cd "$SCRIPT_PATH/.." && pwd -P)"
 
 # Project root = first git dir walking up from $PWD
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [[ -n "$PROJECT_ROOT" ]] || die "Not inside a git repo. Run 'git init' first or cd into the target project."
+PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd -P)"
 
 MODE=""
 if [[ "$SCRIPT_PATH" == "$PROJECT_ROOT/.agency/scripts" ]]; then
@@ -99,7 +127,7 @@ if [[ "$SCRIPT_PATH" == "$PROJECT_ROOT/.agency/scripts" ]]; then
   BLUEPRINT_RESOLVED="$PROJECT_ROOT/.agency"
 elif [[ -n "${BLUEPRINT_DIR:-}" && -d "$BLUEPRINT_DIR/.claude" ]]; then
   MODE="sibling"
-  BLUEPRINT_RESOLVED="$(cd "$BLUEPRINT_DIR" && pwd)"
+  BLUEPRINT_RESOLVED="$(cd "$BLUEPRINT_DIR" && pwd -P)"
   [[ "$BLUEPRINT_RESOLVED" == "$PROJECT_ROOT"* ]] && die "BLUEPRINT_DIR points inside the target project ($PROJECT_ROOT). Clone it to a sibling directory, or use nested mode."
 else
   cat >&2 <<EOF
@@ -181,47 +209,55 @@ detect_frameworks() {
   fi
 }
 
-# Auto-detect if requested
-if [[ $DETECT -eq 1 ]]; then
-  # Use read loop instead of mapfile for broader shell compatibility
-  FRAMEWORKS=()
-  while IFS= read -r fw; do
-    [[ -n "$fw" ]] && FRAMEWORKS+=("$fw")
-  done < <(detect_frameworks "$PROJECT_ROOT")
+# Framework selection/validation only matters for the `adopt` action.
+# `--uninstall` and `--doctor` operate purely on $PROJECT_ROOT/.claude/ and
+# never reference $FRAMEWORK/$FRAMEWORKS/$PROFILE — requiring a framework
+# flag for them was a bug: `adopt.sh --uninstall` (exactly as documented in
+# --help) used to die with "No frameworks specified" before ever reaching
+# uninstall's own logic.
+if [[ "$ACTION" == "adopt" ]]; then
+  # Auto-detect if requested
+  if [[ $DETECT -eq 1 ]]; then
+    # Use read loop instead of mapfile for broader shell compatibility
+    FRAMEWORKS=()
+    while IFS= read -r fw; do
+      [[ -n "$fw" ]] && FRAMEWORKS+=("$fw")
+    done < <(detect_frameworks "$PROJECT_ROOT")
 
-  if [[ ${#FRAMEWORKS[@]} -eq 0 ]]; then
-    die "Auto-detection found no frameworks. Use --framework or --frameworks to specify manually."
-  fi
-  log "Auto-detected ${#FRAMEWORKS[@]} framework(s): ${FRAMEWORKS[*]}"
-fi
-
-# Ensure at least one framework specified
-if [[ ${#FRAMEWORKS[@]} -eq 0 ]]; then
-  die "No frameworks specified. Use --framework, --frameworks, or --detect."
-fi
-
-# Validate all frameworks
-for fw in "${FRAMEWORKS[@]}"; do
-  case "$fw" in
-    python|node|nextjs|nestjs) ;;
-    *) die "Unknown framework: $fw" ;;
-  esac
-done
-
-# Set FRAMEWORK for backward compatibility (single framework case)
-if [[ ${#FRAMEWORKS[@]} -eq 1 ]]; then
-  FRAMEWORK="${FRAMEWORKS[0]}"
-fi
-
-# ---------- Default profile ----------
-if [[ -z "$PROFILE" ]]; then
-  # If any framework is python or nestjs, default to backend profile
-  for fw in "${FRAMEWORKS[@]}"; do
-    if [[ "$fw" == "python" || "$fw" == "nestjs" ]]; then
-      PROFILE="backend"
-      break
+    if [[ ${#FRAMEWORKS[@]} -eq 0 ]]; then
+      die "Auto-detection found no frameworks. Use --framework or --frameworks to specify manually."
     fi
+    log "Auto-detected ${#FRAMEWORKS[@]} framework(s): ${FRAMEWORKS[*]}"
+  fi
+
+  # Ensure at least one framework specified
+  if [[ ${#FRAMEWORKS[@]} -eq 0 ]]; then
+    die "No frameworks specified. Use --framework, --frameworks, or --detect."
+  fi
+
+  # Validate all frameworks
+  for fw in "${FRAMEWORKS[@]}"; do
+    case "$fw" in
+      python|node|nextjs|nestjs) ;;
+      *) die "Unknown framework: $fw" ;;
+    esac
   done
+
+  # Set FRAMEWORK for backward compatibility (single framework case)
+  if [[ ${#FRAMEWORKS[@]} -eq 1 ]]; then
+    FRAMEWORK="${FRAMEWORKS[0]}"
+  fi
+
+  # ---------- Default profile ----------
+  if [[ -z "$PROFILE" ]]; then
+    # If any framework is python or nestjs, default to backend profile
+    for fw in "${FRAMEWORKS[@]}"; do
+      if [[ "$fw" == "python" || "$fw" == "nestjs" ]]; then
+        PROFILE="backend"
+        break
+      fi
+    done
+  fi
 fi
 
 # ---------- Smart CLAUDE.md merge ----------
@@ -230,7 +266,9 @@ smart_merge_claude_md() {
   local source_file="$2"
   local strategy="${3:-merge}"
 
-  # If target doesn't exist, just copy
+  # If target doesn't exist, this is a create, not a modification — --diff
+  # only applies to files that already exist and would change (see the doc's
+  # "Would create:" vs "Would modify:" distinction).
   if [[ ! -f "$target_file" ]]; then
     log "No existing CLAUDE.md — copying fresh"
     if [[ $DRY_RUN -eq 1 ]]; then
@@ -262,7 +300,10 @@ smart_merge_claude_md() {
     overwrite)
       log "Strategy: overwrite — replacing entire CLAUDE.md"
       if [[ $DRY_RUN -eq 1 ]]; then
-        printf '  DRY: cp %s %s\n' "$source_file" "$target_file"
+        printf '  DRY: cp %s %s (overwrite)\n' "$source_file" "$target_file"
+        if [[ $SHOW_DIFF -eq 1 ]]; then
+          diff -u "$target_file" "$source_file" | sed 's/^/    /' || true
+        fi
       else
         cp "$source_file" "$target_file"
       fi
@@ -274,7 +315,10 @@ smart_merge_claude_md() {
          ! grep -q "<!-- END BLUEPRINT -->" "$target_file"; then
         warn "Existing CLAUDE.md has no blueprint markers — treating as overwrite"
         if [[ $DRY_RUN -eq 1 ]]; then
-          printf '  DRY: cp %s %s\n' "$source_file" "$target_file"
+          printf '  DRY: cp %s %s (no markers, overwrite)\n' "$source_file" "$target_file"
+          if [[ $SHOW_DIFF -eq 1 ]]; then
+            diff -u "$target_file" "$source_file" | sed 's/^/    /' || true
+          fi
         else
           cp "$source_file" "$target_file"
         fi
@@ -283,12 +327,8 @@ smart_merge_claude_md() {
 
       log "Strategy: merge — preserving user sections, updating blueprint sections"
 
-      if [[ $DRY_RUN -eq 1 ]]; then
-        printf '  DRY: Merge blueprint sections into %s\n' "$target_file"
-        return
-      fi
-
-      # Extract sections
+      # Always compute the merge result into a temp file — even in dry-run —
+      # so --diff can show the real result instead of just "would merge".
       local tmp_merged
       tmp_merged="$(mktemp)"
       local tmp_before
@@ -314,11 +354,21 @@ smart_merge_claude_md() {
       [[ -s "$tmp_after" ]] && echo "" >> "$tmp_merged"  # Add blank line if after section exists
       cat "$tmp_after" >> "$tmp_merged"
 
+      rm -f "$tmp_before" "$tmp_after" "$tmp_blueprint"
+
+      if [[ $DRY_RUN -eq 1 ]]; then
+        if [[ $SHOW_DIFF -eq 1 ]]; then
+          printf '  DRY: Merge blueprint sections into %s\n' "$target_file"
+          diff -u "$target_file" "$tmp_merged" | sed 's/^/    /' || true
+        else
+          printf '  DRY: Merge blueprint sections into %s\n' "$target_file"
+        fi
+        rm -f "$tmp_merged"
+        return
+      fi
+
       # Replace target with merged content
       mv "$tmp_merged" "$target_file"
-
-      # Cleanup temp files
-      rm -f "$tmp_before" "$tmp_after" "$tmp_blueprint"
 
       log "Merged blueprint sections into CLAUDE.md"
       ;;
@@ -454,8 +504,36 @@ generate_precommit_config() {
     return
   fi
 
-  if [[ ${#frameworks[@]} -eq 1 ]]; then
-    # Single framework - use existing logic
+  # --precommit-template overrides auto-detection entirely. Warn (don't fail)
+  # if the override doesn't match any detected framework — the user may
+  # deliberately want e.g. Node linters in a Python-only repo.
+  if [[ -n "$PRECOMMIT_TEMPLATE" ]]; then
+    local template_matches=0
+    for fw in "${frameworks[@]}"; do
+      case "$PRECOMMIT_TEMPLATE:$fw" in
+        python:python|python:nestjs|node:node|node:nextjs|node:nestjs) template_matches=1 ;;
+        merged:*) template_matches=1 ;;
+      esac
+    done
+    [[ $template_matches -eq 1 ]] || warn "--precommit-template $PRECOMMIT_TEMPLATE does not match detected framework(s) (${frameworks[*]}) — using it anyway since it was explicitly requested."
+
+    if [[ "$PRECOMMIT_TEMPLATE" == "python" || "$PRECOMMIT_TEMPLATE" == "node" ]]; then
+      local PC_SRC="$BLUEPRINT_RESOLVED/pre-commit/.pre-commit-config.${PRECOMMIT_TEMPLATE}.yaml"
+      if [[ -f "$PC_SRC" ]]; then
+        if [[ $DRY_RUN -eq 1 ]]; then
+          printf '  DRY: cp %s %s (forced by --precommit-template)\n' "$PC_SRC" "$output"
+        else
+          cp "$PC_SRC" "$output"
+        fi
+      else
+        die "Template not found: $PC_SRC"
+      fi
+      return
+    fi
+    # PRECOMMIT_TEMPLATE == "merged" falls through to the merge generator below,
+    # forcing both has_python and has_node on regardless of detected frameworks.
+  elif [[ ${#frameworks[@]} -eq 1 ]]; then
+    # No override, single framework - use existing logic
     local PC_SRC=""
     case "${frameworks[0]}" in
       python) PC_SRC="$BLUEPRINT_RESOLVED/pre-commit/.pre-commit-config.python.yaml" ;;
@@ -471,8 +549,8 @@ generate_precommit_config() {
     return
   fi
 
-  # Multiple frameworks - generate merged config
-  log "Generating merged pre-commit config for ${#frameworks[@]} framework(s)"
+  # Multiple frameworks (or --precommit-template merged) - generate merged config
+  log "Generating merged pre-commit config${PRECOMMIT_TEMPLATE:+ (forced by --precommit-template merged)}"
 
   if [[ $DRY_RUN -eq 1 ]]; then
     printf '  DRY: Generate merged .pre-commit-config.yaml\n'
@@ -482,12 +560,17 @@ generate_precommit_config() {
   local has_python=0
   local has_node=0
 
-  for fw in "${frameworks[@]}"; do
-    case "$fw" in
-      python|nestjs) has_python=1 ;;
-      node|nextjs) has_node=1 ;;
-    esac
-  done
+  if [[ "$PRECOMMIT_TEMPLATE" == "merged" ]]; then
+    has_python=1
+    has_node=1
+  else
+    for fw in "${frameworks[@]}"; do
+      case "$fw" in
+        python|nestjs) has_python=1 ;;
+        node|nextjs) has_node=1 ;;
+      esac
+    done
+  fi
 
   # Detect workspace paths for filters
   local backend_path=""
@@ -723,6 +806,21 @@ case "$ACTION" in
       fi
     fi
 
+    # graphify — install its own post-commit/post-checkout git hooks so the
+    # knowledge graph rebuilds incrementally (AST-only, no LLM) after every
+    # commit, instead of requiring a manual `./scripts/graphify-index.sh`.
+    # `graphify hook install` is idempotent and appends to an existing hook
+    # rather than clobbering it (see vendor/graphify/graphify/hooks.py).
+    if [[ $NO_GRAPHIFY_HOOK -eq 0 ]]; then
+      if [[ $DRY_RUN -eq 1 ]]; then
+        printf '  DRY: graphify hook install\n'
+      elif command -v graphify >/dev/null 2>&1; then
+        ( cd "$PROJECT_ROOT" && graphify hook install >/dev/null 2>&1 ) || warn "graphify hook install failed (non-fatal — run 'graphify hook install' manually later)"
+      else
+        log "graphify not installed — skipping git hook install. Run './scripts/bootstrap.sh' first, or pass --no-graphify-hook to silence this."
+      fi
+    fi
+
     # Self-test: one symlink must resolve
     if [[ $DRY_RUN -eq 0 ]]; then
       if [[ ! -e "$CLAUDE_DIR/skills/brainstorming/SKILL.md" ]]; then
@@ -742,11 +840,15 @@ case "$ACTION" in
       mv "$tmp_settings" "$SETTINGS"
     fi
 
-    log "Adoption complete."
-    log "  Gitignored: .claude/$([[ $MODE == nested ]] && echo ', .agency/')"
-    log "  Written to working tree (review, then commit yourself): CLAUDE.md, .pre-commit-config.yaml, .gitignore"
-    log ""
-    log "Next: run 'claude' in this project."
+    if [[ $DRY_RUN -eq 1 ]]; then
+      log "DRY RUN complete — nothing was written. Re-run without --dry-run to apply."
+    else
+      log "Adoption complete."
+      log "  Gitignored: .claude/$([[ $MODE == nested ]] && echo ', .agency/')"
+      log "  Written to working tree (review, then commit yourself): CLAUDE.md, .pre-commit-config.yaml, .gitignore"
+      log ""
+      log "Next: run 'claude' in this project."
+    fi
     ;;
   uninstall)
     CLAUDE_DIR="$PROJECT_ROOT/.claude"

@@ -102,6 +102,19 @@ if [[ -d "$AGENCY_HOME" ]]; then
   if [[ -d "$AGENCY_HOME/agent-logs" ]]; then
     echo "  Agent logs: $(ls -1 "$AGENCY_HOME/agent-logs"/*.log 2>/dev/null | wc -l) files"
   fi
+
+  if [[ -f "$AGENCY_HOME/hook-errors.log" ]]; then
+    HOOK_ERROR_COUNT=$(wc -l < "$AGENCY_HOME/hook-errors.log" | tr -d ' ')
+    if [[ "$HOOK_ERROR_COUNT" -gt 0 ]]; then
+      warn "Hook errors: $HOOK_ERROR_COUNT recorded (see $AGENCY_HOME/hook-errors.log)"
+      echo "  Most recent:"
+      tail -3 "$AGENCY_HOME/hook-errors.log" | sed 's/^/    /'
+    else
+      success "Hook errors: none recorded"
+    fi
+  else
+    success "Hook errors: none recorded"
+  fi
 else
   warn "Agency home not initialized: $AGENCY_HOME"
 fi
@@ -147,6 +160,12 @@ fi
 
 if [[ ! -d ".claude" ]] && [[ "$PWD" != "$BLUEPRINT_DIR" ]]; then
   echo "  4. Adopt project: $BLUEPRINT_DIR/scripts/adopt.sh --framework <type>"
+  ((ISSUES++))
+fi
+
+HOOK_ERR_FILE="${CLAUDE_AGENCY_HOME:-$HOME/.claude-agency}/hook-errors.log"
+if [[ -f "$HOOK_ERR_FILE" ]] && [[ "$(wc -l < "$HOOK_ERR_FILE" | tr -d ' ')" -gt 10 ]]; then
+  echo "  5. Investigate recurring hook failures: $HOOK_ERR_FILE"
   ((ISSUES++))
 fi
 

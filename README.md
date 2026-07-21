@@ -205,13 +205,49 @@ Zones: **Meeting Room** (waiting for you — click to reply), **Office** (workin
 
 Data flow:
 ```
-Claude Code hooks → ~/.claude-agency/events.jsonl → server → dashboard polls /api/state.json (2s)
+Claude Code hooks → ~/.claude-agency/events.jsonl → server → WebSocket push to dashboard (falls back to polling if disconnected)
                                                       └── /api/unblock → ~/.claude-agency/inbox/<session>.txt
 ```
 
 Hooks are registered in `.claude/settings.json` (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStop`) and all funnel through `.claude/hooks/agency-emit.sh`.
 
-**Self-resume**: agents that block on `/wait-for-reply "<question>"` show up in the dashboard **Meeting Room**; your reply in the dashboard lands in `~/.claude-agency/inbox/<session>.txt`, the poll picks it up, agent continues in the same turn. `/check-inbox` is the non-blocking variant for start-of-turn pulls. See `dashboard/README.md` for the full loop.
+**Self-resume**: agents that block on `/wait-for-reply "<question>"` show up in the dashboard **Meeting Room**; your reply in the dashboard lands in `~/.claude-agency/inbox/<session>.txt`, the agent picks it up, and continues in the same turn. `/check-inbox` is the non-blocking variant for start-of-turn pulls. See `dashboard/README.md` for the full loop.
+
+## Tips for New Users
+
+You don't need to touch the orchestrator or write config to get value from this blueprint day-to-day. Here's the minimum useful workflow:
+
+**1. Start the dashboard once, and leave it open.**
+
+```bash
+cd dashboard && npm install    # first time only, installs the ws dependency
+node server.mjs
+```
+
+Open **http://127.0.0.1:7842** in a browser tab and leave it there. It's read-only and localhost-only (no login, nothing to configure) — it just shows you what every Claude Code session on your machine is doing, live, across every project you have open. Think of it as a live status board, not something you have to actively drive.
+
+**2. Work in Claude Code as normal — the dashboard fills in on its own.**
+
+You don't call the dashboard from your prompts. Just use `claude` in your project like you always would. As you work, your session shows up in the dashboard automatically:
+- **Office** — Claude is actively working (editing, running commands)
+- **Cafeteria** — Claude is idle, waiting on you
+- **Meeting Room** — Claude asked a question and is blocked waiting for your answer
+
+**3. When an agent lands in "Meeting Room," reply from the dashboard.**
+
+If you kick off a longer task (especially anything using `/ticket` or a subagent that calls `/wait-for-reply`) and it needs your input, you don't have to keep the terminal in focus. Just glance at the dashboard, click the blocked agent's card in **Meeting Room**, type your answer, and submit. The agent picks it up and keeps going — no need to switch back to the terminal at the exact right moment.
+
+**4. Use `/check-inbox` if you're back at the terminal and want to check for a reply yourself.**
+
+If you're already in the Claude Code session and want to see whether you (or a teammate) left a reply via the dashboard, just ask Claude to run `/check-inbox` — it's non-blocking, so it either surfaces the reply or tells you there's nothing waiting, no delay either way.
+
+**5. Multiple projects open at once? One dashboard covers all of them.**
+
+The dashboard isn't per-project — it watches `~/.claude-agency/events.jsonl`, which every adopted project's Claude Code session writes to. Run one dashboard instance and it'll show every session across every repo you have open, grouped by ticket/branch in the **Tickets** tab.
+
+**6. Don't worry about the orchestrator unless you actually want unattended automation.**
+
+The dashboard works fully standalone — it doesn't require `orchestrator/` to be running. Only set up the orchestrator (see below) if you want tickets picked up automatically without you starting each session by hand; for day-to-day interactive use, the dashboard + your normal `claude` sessions is all you need.
 
 ## Customizing per Team
 

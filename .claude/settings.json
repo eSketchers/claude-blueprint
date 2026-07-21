@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/agency-emit.sh session_start"
+            "command": ".claude/hooks/guard.sh agency-emit:session_start .claude/hooks/agency-emit.sh session_start"
           }
         ]
       }
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/detect-ticket.sh"
+            "command": ".claude/hooks/guard.sh detect-ticket .claude/hooks/detect-ticket.sh"
           }
         ]
       },
@@ -58,7 +58,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/agency-emit.sh prompt_submit"
+            "command": ".claude/hooks/guard.sh agency-emit:prompt_submit .claude/hooks/agency-emit.sh prompt_submit"
           }
         ]
       }
@@ -68,7 +68,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/agency-emit.sh pre_tool"
+            "command": ".claude/hooks/guard.sh agency-emit:pre_tool .claude/hooks/agency-emit.sh pre_tool"
           }
         ]
       }
@@ -79,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/run-pre-commit.sh"
+            "command": ".claude/hooks/guard.sh run-pre-commit .claude/hooks/run-pre-commit.sh"
           }
         ]
       },
@@ -87,7 +87,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/agency-emit.sh post_tool"
+            "command": ".claude/hooks/guard.sh agency-emit:post_tool .claude/hooks/agency-emit.sh post_tool"
           }
         ]
       }
@@ -97,7 +97,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/agency-emit.sh notification"
+            "command": ".claude/hooks/guard.sh agency-emit:notification .claude/hooks/agency-emit.sh notification"
           }
         ]
       }
@@ -107,7 +107,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/agency-emit.sh subagent_stop"
+            "command": ".claude/hooks/guard.sh agency-emit:subagent_stop .claude/hooks/agency-emit.sh subagent_stop"
           }
         ]
       }
@@ -117,7 +117,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/agency-emit.sh stop"
+            "command": ".claude/hooks/guard.sh agency-emit:stop .claude/hooks/agency-emit.sh stop"
           }
         ]
       }

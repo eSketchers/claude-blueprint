@@ -79,8 +79,9 @@ touch ~/.claude-agency/KILLSWITCH
 
 Effect:
 - No new tickets picked up
-- Running tickets get marked `halted` on their next emitted event (not force-killed — see limitations)
-- Slack notified
+- Running tickets are marked `halted` and their spawned agent process is force-killed: SIGTERM to the process group first, then SIGKILL after `budget.kill_grace_ms` (default 30s) if it hasn't exited
+- A periodic sweep (every tick) catches tickets that stop emitting events entirely, so a hung agent is still killed even without a fresh hook event to trigger it
+- Slack notified on halt, and again if SIGKILL was needed
 
 Release:
 
@@ -135,10 +136,21 @@ When a stuck ticket emits a new substantive event (not `stop`), it transitions b
 
 Tune all thresholds in `config/orchestrator.json` under the `stuck` block. Set any to an absurdly high value to effectively disable a rule.
 
+### Whitelisting tickets
+
+Some tickets are expected to go long without a file edit — research spikes, infra investigation, anything read-heavy by nature. Exclude them from stuck detection entirely with `stuck.whitelist`, a list of glob patterns (`*` wildcard) matched against the ticket's id and its labels:
+
+```json
+"stuck": {
+  "whitelist": ["gh:your-org/your-repo#42", "research-*", "long-running"]
+}
+```
+
+A whitelisted ticket never transitions to `stuck` for any rule (idle, tool_loop, thrashing, stopped_no_changes) — it's a full opt-out, not a threshold adjustment. Non-whitelisted tickets are unaffected.
+
 ## Known limitations (v1)
 
 - **Budget is approximate** — not real tokens.
-- **Halt does not kill running processes** — it only stops new spawns and marks tickets halted on next event. A forcible PID kill on halt is v2.
 - **One orchestrator per host.** Multi-host is v2.
 - **No retries.** If a spawn crashes early, the ticket stays `in_progress` until manually updated.
 - **Session→ticket linking is approximate.** If your spawn doesn't set `CLAUDE_SESSION_ID` before the agent first emits, the tail uses the ticket branch slug to correlate.
@@ -146,9 +158,6 @@ Tune all thresholds in `config/orchestrator.json` under the `stuck` block. Set a
 
 ## What to build next (v2 wishlist)
 
-- Real token counts (parse Claude Code's usage output)
 - ClickUp / Linear / Jira sources
-- Retry on crash + backoff
-- Forcible halt (PID kill)
 - Per-repo policy (auto-merge chores, require approval for migrations)
 - Reviewer-bot PR approval

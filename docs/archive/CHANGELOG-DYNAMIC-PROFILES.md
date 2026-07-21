@@ -1,3 +1,12 @@
+> **⚠️ ARCHIVED DOCUMENTATION**
+>
+> This document has been archived. For current documentation, see:
+> - [Changelog](../CHANGELOG.md) - Current changelog
+>
+> This archived version is kept for historical reference and contains detailed technical information that may still be useful.
+
+---
+
 # Change Log: Dynamic Context Optimization (Profile System)
 
 Complete record of all changes made to implement dynamic MCP and agent profiles.

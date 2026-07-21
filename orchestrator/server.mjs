@@ -21,6 +21,7 @@ import { fetchGithub }     from './sources/github.mjs';
 import { fetchFilesystem, archiveFilesystemTicket } from './sources/filesystem.mjs';
 import { detectStuck }     from './stuck-detector.mjs';
 import { buildDigest, formatMarkdown } from './digest.mjs';
+import { RetryManager }    from './retry-manager.mjs';
 
 const CONFIG_PATH = process.env.AGENCY_ORCH_CONFIG || resolve('config/orchestrator.json');
 const HOME        = process.env.CLAUDE_AGENCY_HOME || join(homedir(), '.claude-agency');
@@ -42,6 +43,8 @@ const registry = new Registry(HOME);
 const budget   = new Budget(config.budget || {}, registry);
 const notifier = new Notifier(config.notifier || {});
 const stuckCfg = config.stuck || {};
+const retryManager = new RetryManager(config.retry || {});
+const retryQueue = new Map(); // ticketId -> timeoutId
 
 // In-memory sliding window of recent events per ticket + last stuck notification time.
 // Lost on restart — idle-rule still works off persisted last_event_at.
@@ -54,6 +57,37 @@ console.log(`[orchestrator] config=${CONFIG_PATH}`);
 console.log(`[orchestrator] sources=${(config.sources || []).filter(s => s.enabled !== false).map(s => `${s.type}:${s.name}`).join(', ') || '(none enabled)'}`);
 console.log(`[orchestrator] daily cap=$${config.budget?.daily_usd_cap} · per-ticket cap=$${config.budget?.per_ticket_usd_cap}`);
 if (config.spawn?.dry_run) console.log(`[orchestrator] SPAWN DRY RUN — no real sessions will start`);
+
+// ---------- Spawn retry handler ----------
+
+function handleSpawnFailure(ticketId, reason) {
+  console.error(`[orchestrator] Spawn failed for ${ticketId}: ${reason}`);
+
+  const [shouldRetry, delay] = retryManager.shouldRetry(ticketId, registry);
+
+  if (shouldRetry) {
+    retryManager.markAttempt(ticketId, registry);
+    console.log(`[orchestrator] Scheduling retry for ${ticketId} in ${delay}ms`);
+
+    const timeoutId = setTimeout(() => {
+      retryQueue.delete(ticketId);
+      // Re-queue the ticket for processing
+      registry.update(ticketId, { status: 'pending' });
+    }, delay);
+
+    retryQueue.set(ticketId, timeoutId);
+  } else {
+    retryManager.markFailed(ticketId, registry, reason);
+    console.error(`[orchestrator] Max retries exceeded for ${ticketId}, marking as failed`);
+
+    // Send notification if configured
+    notifier.notify('error', {
+      title: `Ticket ${ticketId} failed`,
+      body: `Failed after ${registry.get(ticketId)?.spawn_attempts || 0} attempts: ${reason}`,
+      ticket_id: ticketId,
+    });
+  }
+}
 
 // ---------- Intake tick ----------
 
@@ -98,20 +132,39 @@ async function intakeTick() {
 
       console.log(`[intake] claimed ${t.id} — "${t.title}"`);
       const spec = { ...config.spawn };
-      const result = spawnTicketAgent({
-        ticket_id:  t.id,
-        ticket_url: t.url,
-        repo_path:  t.repo_path,
-        title:      t.title,
-      }, spec, LOG_DIR);
 
-      registry.update(t.id, {
-        status: result.dry_run ? 'dry_run' : 'in_progress',
-        spawned_pid: result.pid,
-        spawned_at:  Date.now(),
-        log_file:    result.logFile,
-        command:     result.command,
-      });
+      try {
+        const result = spawnTicketAgent({
+          ticket_id:  t.id,
+          ticket_url: t.url,
+          repo_path:  t.repo_path,
+          title:      t.title,
+        }, spec, LOG_DIR, budget);
+
+        registry.update(t.id, {
+          status: result.dry_run ? 'dry_run' : 'in_progress',
+          spawned_pid: result.pid,
+          spawned_at:  Date.now(),
+          log_file:    result.logFile,
+          command:     result.command,
+        });
+
+        // Monitor for early exit (crash detection)
+        if (result.pid && !result.dry_run) {
+          setTimeout(() => {
+            // Check if process still running after 30s
+            try {
+              process.kill(result.pid, 0); // Signal 0 = check if alive
+            } catch {
+              // Process died early - schedule retry
+              handleSpawnFailure(t.id, 'Process exited early');
+            }
+          }, 30000);
+        }
+      } catch (err) {
+        handleSpawnFailure(t.id, err.message);
+        continue; // Skip notification below if spawn failed
+      }
 
       await notifier.notify('info', {
         title: `Agent spawned for ${t.title}`,

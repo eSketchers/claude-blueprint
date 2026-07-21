@@ -1,5 +1,7 @@
 # Claude Code Configuration — NestJS Microservice
 
+<!-- BEGIN BLUEPRINT -->
+
 ## Project identity
 
 - **Framework**: NestJS 10+
@@ -98,3 +100,5 @@ If you're running alongside other agents and need a decision, call `/wait-for-re
 - Never run queries against prod/staging. Read-only local replicas only, referenced by `DATABASE_URL`.
 - Never modify CI workflows without a linked ticket. CI changes are blast-radius.
 - PRs touching `migrations/`, `auth/`, `billing/`, or `*_consumer.py` require a human architect review before merge, even if tests pass.
+
+<!-- END BLUEPRINT -->

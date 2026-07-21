@@ -1,3 +1,13 @@
+> **⚠️ ARCHIVED DOCUMENTATION**
+>
+> This document has been archived. For current documentation, see:
+> - [Advanced Guide](../ADVANCED.md) - Token Optimization section
+> - [Changelog](../CHANGELOG.md) - Recent changes
+>
+> This archived version is kept for historical reference and contains detailed technical information that may still be useful.
+
+---
+
 # Safe Context Reduction Strategies
 
 This document outlines **safe** approaches to reducing context window usage without degrading code quality or introducing bugs.

@@ -9,6 +9,8 @@ import { join, dirname, resolve, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { buildDigest, formatMarkdown } from '../orchestrator/digest.mjs';
+import { WebSocketServer } from 'ws';
+import { EventReader } from './event-reader.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.AGENCY_PORT || 7842);
@@ -42,21 +44,27 @@ if (!existsSync(EVENTS)) writeFileSync(EVENTS, '');
 
 // ---------- State derivation ----------
 
+// Initialize EventReader for efficient incremental reading
+const eventReader = new EventReader(EVENTS, {
+  maxCacheSize: 10000,
+  rotateThreshold: 100 * 1024 * 1024
+});
+
+// Initialize cache on startup
+await eventReader.readAll();
+
 /**
- * In-memory state, rebuilt from events.jsonl on every API hit (small files,
- * this is fine; we can upgrade to incremental if the log grows huge).
+ * In-memory state, rebuilt from cached events (efficient O(cache) not O(file)).
  */
 function buildState() {
-  const raw = existsSync(EVENTS) ? readFileSync(EVENTS, 'utf8') : '';
-  const lines = raw.split('\n').filter(Boolean);
+  // Use cached events instead of reading file
+  const events = eventReader.cache;
   const agents = new Map();   // key: session_id + '/' + (agent_id || '')
   const tickets = new Map();  // key: ticket slug
 
   const IDLE_MS = 60_000; // if no event for 60s, consider agent idle
 
-  for (const line of lines) {
-    let ev;
-    try { ev = JSON.parse(line); } catch { continue; }
+  for (const ev of events) {
 
     const key = `${ev.session_id}/${ev.agent_id || ''}`;
     const ticketKey = ev.ticket || ev.branch || '(main)';
@@ -154,6 +162,7 @@ function buildState() {
       waiting: [...agents.values()].filter(a => a.status === 'waiting').length,
       idle:    [...agents.values()].filter(a => a.status === 'idle').length,
     },
+    stats: eventReader.getStats(),
   };
 }
 
@@ -237,9 +246,72 @@ const server = createServer(async (req, res) => {
     return res.end(JSON.stringify({ ok: true, home: HOME }));
   }
 
+  if (url.pathname === '/api/stats') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    return res.end(JSON.stringify(eventReader.getStats()));
+  }
+
   if (req.method === 'GET') return serveStatic(req, res, url.pathname === '/' ? '/index.html' : url.pathname);
   res.writeHead(404); res.end('not found');
 });
+
+// WebSocket server
+const wss = new WebSocketServer({ server });
+
+let eventWatcher = null;
+
+// WebSocket connection handler
+wss.on('connection', (ws) => {
+  console.log('[dashboard] WebSocket client connected');
+
+  // Send current state immediately
+  ws.send(JSON.stringify({
+    type: 'full_state',
+    data: buildState()
+  }));
+
+  ws.on('close', () => {
+    console.log('[dashboard] WebSocket client disconnected');
+  });
+
+  ws.on('error', (err) => {
+    console.error('[dashboard] WebSocket error:', err);
+  });
+});
+
+// Watch events.jsonl for changes and use EventReader for efficient reading
+function startEventWatcher() {
+  if (eventWatcher) return; // Already watching
+
+  eventWatcher = watch(EVENTS, async (eventType) => {
+    if (eventType === 'change') {
+      const newEvents = await eventReader.readNew();
+
+      if (newEvents.length > 0) {
+        // Broadcast to all connected clients
+        const message = JSON.stringify({
+          type: 'incremental_events',
+          data: newEvents
+        });
+
+        wss.clients.forEach((client) => {
+          if (client.readyState === 1) { // OPEN
+            client.send(message);
+          }
+        });
+
+        // Check if rotation needed
+        if (eventReader.shouldRotate()) {
+          console.log('[dashboard] Event log rotation needed (>100MB)');
+          // Could trigger rotation here
+        }
+      }
+    }
+  });
+}
+
+// Start watching when server starts
+startEventWatcher();
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`[agency-dashboard] http://127.0.0.1:${PORT}`);

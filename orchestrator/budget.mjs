@@ -55,6 +55,32 @@ export class Budget {
     this.registry.addSpend(ticketId, this.config.cost_per_event_usd);
   }
 
+  /** Record actual cost from Claude Code JSON output */
+  addRealCost(ticketId, costUsd) {
+    if (!ticketId || costUsd === undefined) return;
+
+    // Store both estimated and real costs
+    const existing = this.registry.state.tickets[ticketId] || {};
+    const estimated = existing.spend_usd || 0;
+
+    this.registry.state.tickets[ticketId] = {
+      ...existing,
+      spend_usd: costUsd,  // Use real cost
+      estimated_spend_usd: estimated,  // Keep estimated for comparison
+      real_cost_tracked: true,
+      cost_variance: costUsd - estimated,
+      last_updated: Date.now()
+    };
+
+    // Save immediately
+    this.registry._flush();
+
+    // Log significant variance
+    if (Math.abs(costUsd - estimated) > estimated * 0.2) {
+      console.log(`[budget] Cost variance for ${ticketId}: Real=$${costUsd.toFixed(3)}, Estimated=$${estimated.toFixed(3)} (${((costUsd/estimated - 1) * 100).toFixed(1)}% diff)`);
+    }
+  }
+
   /** Crossed a threshold since last report? Returns { warn, reason } or null */
   checkThresholds() {
     const today = this.registry.todaySpend();

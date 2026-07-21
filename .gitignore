@@ -1,5 +1,8 @@
 .worktrees/
 
+# Node.js dependencies
+node_modules/
+
 # A dev may accidentally nest this blueprint inside another project.
 .agency/
 
@@ -9,3 +12,7 @@
 
 # Local settings (user-specific)
 .claude/settings.local.json
+
+# Claude Agency Blueprint - Configuration backups
+*.backup-*
+agents.backup/

@@ -1,3 +1,13 @@
+> **⚠️ ARCHIVED DOCUMENTATION**
+>
+> This document has been archived. For current documentation, see:
+> - [Advanced Guide](../ADVANCED.md) - Profile System and Ticket Workflows sections
+> - [Changelog](../CHANGELOG.md) - Recent changes
+>
+> This archived version is kept for historical reference and contains detailed technical information that may still be useful.
+
+---
+
 # /ticket Workflow Profile Usage
 
 Quick guide for choosing the right profile when running `/ticket`.

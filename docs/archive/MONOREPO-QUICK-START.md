@@ -1,3 +1,13 @@
+> **⚠️ ARCHIVED DOCUMENTATION**
+>
+> This document has been archived. For current documentation, see:
+> - [Advanced Guide](../ADVANCED.md) - Monorepo Support section
+> - [Changelog](../CHANGELOG.md) - Recent changes
+>
+> This archived version is kept for historical reference and contains detailed technical information that may still be useful.
+
+---
+
 # Monorepo Quick Start Guide
 
 > **Status:** Solution designed but not yet implemented. See [MONOREPO-SUPPORT-SOLUTION.md](./MONOREPO-SUPPORT-SOLUTION.md) for full details.

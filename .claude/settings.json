@@ -79,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pre-commit run --files \"$CLAUDE_TOOL_FILE_PATH\" 2>/dev/null || true"
+            "command": ".claude/hooks/run-pre-commit.sh"
           }
         ]
       },

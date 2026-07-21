@@ -1,3 +1,13 @@
+> **⚠️ ARCHIVED DOCUMENTATION**
+>
+> This document has been archived. For current documentation, see:
+> - [Setup Guide](../SETUP.md) - Getting started and adoption
+> - [Changelog](../CHANGELOG.md) - Recent changes
+>
+> This archived version is kept for historical reference and contains detailed technical information that may still be useful.
+
+---
+
 # Local-Only Adoption
 
 Adopt the agency blueprint into an existing repo on your laptop — no shared infra, no team rollout. Everything the script generates is gitignored and yours alone.
@@ -74,6 +84,91 @@ For `python` and `nestjs`, the backend deny-list is merged automatically (`--pro
 - `.claude/` — everything adopt creates.
 - `.agency/` (nested only) — the blueprint clone.
 - `$HOME/.claude-agency/` — event log and inbox, already per-user.
+
+## CLAUDE.md merge strategies
+
+When you re-run adoption (e.g., to update blueprint content), the script intelligently handles your existing `CLAUDE.md`:
+
+### Strategy: `merge` (default)
+
+Preserves your customizations while updating blueprint sections.
+
+```bash
+scripts/adopt.sh --framework python  # uses merge by default
+```
+
+**How it works:**
+- Blueprint sections are wrapped in `<!-- BEGIN BLUEPRINT -->` / `<!-- END BLUEPRINT -->` markers
+- Content **before** the first marker is preserved (e.g., project-specific context)
+- Content **between** markers is updated from the blueprint
+- Content **after** the last marker is preserved (e.g., custom conventions)
+- Creates timestamped backup: `CLAUDE.md.backup-YYYY-MM-DD-HHMMSS`
+
+**Example custom sections:**
+
+```markdown
+# Claude Code Configuration — Python Project
+
+## Our Team Context
+- Sprint cadence: 2 weeks
+- Architecture decisions: see docs/ADRs/
+- Production access: read-only via AWS SSO
+
+<!-- BEGIN BLUEPRINT -->
+[Blueprint-maintained content here]
+<!-- END BLUEPRINT -->
+
+## Our Custom Tools
+- Use our internal CLI: `mycorp-cli` for deployments
+- Monitoring dashboard: https://grafana.mycorp.com
+```
+
+### Strategy: `overwrite`
+
+Replaces the entire file with the fresh blueprint version.
+
+```bash
+scripts/adopt.sh --framework python --merge-strategy overwrite
+```
+
+**Use when:**
+- You want to start fresh with blueprint defaults
+- Your customizations are outdated or no longer needed
+- Always creates a backup first
+
+### Strategy: `backup-only`
+
+Creates a backup without modifying `CLAUDE.md`.
+
+```bash
+scripts/adopt.sh --framework python --merge-strategy backup-only
+```
+
+**Use when:**
+- You want to preserve a snapshot before manual edits
+- You're testing adoption changes without affecting the file
+
+### First adoption behavior
+
+If no `CLAUDE.md` exists, all strategies behave identically: the blueprint version is copied as-is (with markers already included).
+
+### Re-adoption without markers
+
+If you adopted before markers were added (or manually removed them), the script treats your file as fully custom and uses `overwrite` strategy with a warning:
+
+```
+[warn] Existing CLAUDE.md has no blueprint markers — treating as overwrite
+[adopt] Created backup: CLAUDE.md.backup-2026-07-16-143022
+```
+
+### Backup retention
+
+Backups are never auto-deleted. Review and clean them manually:
+
+```bash
+ls -la CLAUDE.md.backup-*
+rm CLAUDE.md.backup-2026-07-15-*  # after verifying merge succeeded
+```
 
 ## Updates
 

@@ -40,7 +40,13 @@ export function spawnTicketAgent(ticket, spec, logDir, budget) {
   }
   const args = finalArgs;
   const cwd  = spec.cwd ? expand(spec.cwd, vars) : vars.repo_path;
-  const env  = { ...process.env, ...(spec.env || {}) };
+  // Set CLAUDE_SESSION_ID to the ticket id itself (rather than letting Claude
+  // Code generate its own UUID) so agency-emit.sh's hook events carry a
+  // predictable, already-known session_id — this is what lets
+  // sessionToTicketId() in server.mjs match events back to the right ticket
+  // by exact session_id lookup, instead of falling back to parsing a git
+  // branch slug out of the ticket text.
+  const env  = { ...process.env, ...(spec.env || {}), CLAUDE_SESSION_ID: ticket.ticket_id };
 
   if (spec.dry_run) {
     const line = `DRY-RUN would spawn: ${cmd} ${args.map(a => `'${a}'`).join(' ')} (cwd=${cwd})`;

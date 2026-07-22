@@ -128,8 +128,59 @@ function ticketRow(t) {
     <td>${escapeHtml(t.repo || '')}</td>
     <td>${t.agents.length}</td>
     <td>${fmtAgo(Date.now() - t.last_activity)}</td>
+    <td><button class="ghost view-logs-btn">View Logs</button></td>
   `;
+  tr.querySelector('.view-logs-btn').addEventListener('click', () => openLogModal(t.id));
   return tr;
+}
+
+// Log viewer modal — polls /api/agent-log/:ticket on an interval while open.
+// Deliberately polling, not WebSocket-pushed: keeps this feature self-contained
+// (no per-ticket server-side file watchers / subscription bookkeeping) while
+// still satisfying the core ask (see what an agent is doing without shelling
+// into agent-logs/*.log by hand).
+const LOG_POLL_MS = 2000;
+let logModalInterval = null;
+
+function closeLogModal() {
+  if (logModalInterval) { clearInterval(logModalInterval); logModalInterval = null; }
+  $('#modal-root').innerHTML = '';
+}
+
+async function refreshLogModal(ticketId) {
+  const pre = document.getElementById('log-modal-content');
+  if (!pre) { closeLogModal(); return; } // modal was closed since the last tick
+  try {
+    const r = await fetch(`/api/agent-log/${encodeURIComponent(ticketId)}?lines=200`);
+    if (r.status === 404) {
+      pre.textContent = '(no log file yet for this ticket)';
+      return;
+    }
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    const wasAtBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 20;
+    pre.textContent = data.lines.join('\n');
+    if (wasAtBottom) pre.scrollTop = pre.scrollHeight;
+  } catch {/* transient network errors — leave prior content visible */}
+}
+
+function openLogModal(ticketId) {
+  const root = $('#modal-root');
+  root.innerHTML = `
+    <div class="modal-backdrop">
+      <div class="modal modal-wide">
+        <h3>Log: <code>${escapeHtml(ticketId)}</code></h3>
+        <pre id="log-modal-content" class="log-viewer">Loading…</pre>
+        <div class="actions">
+          <button class="ghost" id="log-modal-close">Close</button>
+        </div>
+      </div>
+    </div>
+  `;
+  $('#log-modal-close').addEventListener('click', closeLogModal);
+  refreshLogModal(ticketId);
+  if (logModalInterval) clearInterval(logModalInterval);
+  logModalInterval = setInterval(() => refreshLogModal(ticketId), LOG_POLL_MS);
 }
 
 function render(state) {

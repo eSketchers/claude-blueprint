@@ -641,6 +641,8 @@ Creates a knowledge graph of your codebase. Claude can query the graph instead o
 - Re-indexing 5 changed files: ~5-15 seconds (vs 2-5 minutes for full re-index)
 - Makes post-commit hooks practical for keeping graph fresh automatically
 
+**Automatic re-indexing (default since 2026-07-21):** `scripts/adopt.sh` now runs `graphify hook install` during adoption, which installs graphify's own `post-commit` and `post-checkout` git hooks — the graph rebuilds itself (AST-only, no LLM call) after every commit and every branch switch, so `./scripts/graphify-index.sh` above is only needed for the very first index or a manual re-run. Pass `--no-graphify-hook` to `adopt.sh` to skip this (e.g. if you'd rather manage indexing manually, or graphify isn't installed yet — adoption still succeeds either way). Check hook status any time with `graphify hook status`; remove with `graphify hook uninstall`.
+
 **When to re-index:**
 
 The knowledge graph captures file structure, function/class definitions, and code relationships. Re-index when these change significantly:

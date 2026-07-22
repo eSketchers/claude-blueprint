@@ -67,10 +67,14 @@ trunc() { printf '%s' "${1:0:500}"; }
   printf '}\n'
 } >> "$EVENTS"
 
-# For blocking events, also create an inbox slot the user can fill
+# For blocking events, also create an inbox slot the user can fill.
+# Use noclobber (set -C) so the create is a single atomic syscall rather than
+# a check-then-act (`[[ -f ]] || ...`) that could race with the dashboard's
+# /api/unblock already having written a reply here — that race could truncate
+# an operator's reply that landed between the check and the create.
 if [[ "$KIND" == "notification" ]]; then
   SLOT="$INBOX/${SESSION_ID}.txt"
-  [[ -f "$SLOT" ]] || : > "$SLOT"
+  ( set -C; : > "$SLOT" ) 2>/dev/null || true
 fi
 
 exit 0

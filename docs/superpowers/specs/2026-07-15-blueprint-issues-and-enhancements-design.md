@@ -3,27 +3,26 @@
 **Date:** 2026-07-15
 **Analysis Type:** Component-by-Component
 **Scope:** Entire claude-agency-blueprint system
-**Last Updated:** 2026-07-17
+**Last Updated:** 2026-07-22 (restructured into Completed / To-Do only — see "Note on document structure" below)
 
 ---
 
-## Implementation Status
+## Note on document structure (2026-07-22)
 
-**✅ COMPLETED (9 issues):**
-- 4 CRITICAL priority fixes (3 in PR #6, 1 in PR #5)
-- 5 HIGH priority fixes (all in PR #6)
+This document previously carried the same information in five or six overlapping places — a top "Implementation Status" summary, per-issue writeups, a "Remaining Work — Flat Priority List," an "Implementation Roadmap," and a "Conclusion" with its own progress summary and six separate "Key Accomplishments" sub-sections that had drifted out of sync with each other over time. It has been restructured into exactly two sections, **Completed** and **To-Do**, with every duplicate removed. Nothing substantive was deleted — each issue's full writeup (what was implemented, what was deliberately scoped out, real bugs found along the way, test coverage) is kept exactly once, in the Completed section if done, or as the original problem/solution sketch in the To-Do section if not.
 
-**📋 REMAINING:**
-- 5+ MEDIUM priority issues
-- 10+ LOW priority issues
+**Note on prioritization scheme (2026-07-20, retained for history):** this document previously used a risk-ranked "Tier 0–6" system layered on top of the original CRITICAL/HIGH/MEDIUM/LOW labels. That system was retired by explicit user decision on 2026-07-20 — it served its purpose while safety- and confidence-critical fixes were the priority, but the remaining work didn't map cleanly onto it anymore. Priority is the flat CRITICAL/HIGH/MEDIUM/LOW scheme throughout this document. Three items were explicitly downgraded from MEDIUM to LOW as part of that change (Orchestrator Issue 4, Token Optimization Issue 1, Token Optimization Issue 6); Orchestrator Issue 4 has since been completed (see below).
 
-See [Pull Request #6](https://github.com/eSketchers/claude-blueprint/pull/6) for completed implementations.
+**Status count (verified by re-scanning every issue's own status line, not by incrementing a summary counter):**
+- **30/45 complete** — 28 fully done + 2 deliberately partial-scope completions (Orchestrator Issue 6, Adoption Issue 2 — both closed by explicit decision to ship a narrower fix rather than the original full spec; see their entries below)
+- **15/45 remaining** — all LOW priority
+- Full test suite: `node --test tests/` → **198/198 passing**
 
 ---
 
 ## Executive Summary
 
-This document provides a comprehensive analysis of the claude-agency-blueprint, identifying issues and their solutions across all major components. The analysis follows a component-by-component approach, organizing findings by:
+This document analyzes the claude-agency-blueprint system component-by-component:
 
 1. **Cross-Cutting Issues** - Affect multiple components
 2. **Orchestrator** - Autonomous ticket processing
@@ -34,152 +33,76 @@ This document provides a comprehensive analysis of the claude-agency-blueprint, 
 7. **Hooks & Integration** - Workflow automation
 8. **Documentation & Developer Experience**
 
-Each issue is paired with its solution(s) for immediate actionability.
+45 issues were identified across these 8 areas. Each is listed once below, under Completed or To-Do.
 
 ---
+
+# Completed (30/45)
 
 ## Cross-Cutting Issues
 
 ### Issue 1: No actual token tracking system-wide
 
 **Priority:** HIGH
-**Status:** ✅ COMPLETED - PR #6 (Commit: a43694a)
+**Status:** ✅ COMPLETED — PR #6 (Commit: a43694a)
 
-**Problem:** Budget uses event-count proxy; no visibility into real costs across orchestrator/agents
+**Problem:** Budget uses event-count proxy; no visibility into real costs across orchestrator/agents.
 
-**Solution:**
-- Parse Claude Code `--output-format json` for `total_cost_usd` (confirmed available)
-- Update orchestrator/spawn.mjs to capture real costs
-- Update budget.mjs with `addRealCost(ticketId, costUsd)` method
-- Add cost reporting dashboard showing actual spend per ticket/agent/session
-
-**Implementation Notes:**
-```javascript
-// spawn.mjs - Change command to JSON output mode
-const args = ['-p', '--output-format', 'stream-json', '/ticket', ticketUrl];
-
-// Parse final result event
-const resultEvent = JSON.parse(lastLine);
-const actualCost = resultEvent.total_cost_usd;
-
-// Update budget with real cost
-budget.addRealCost(ticketId, actualCost);
-```
+**What was implemented:** Parse Claude Code's `--output-format json`/`stream-json` for `total_cost_usd`; `orchestrator/spawn.mjs` captures real costs; `budget.mjs` got an `addRealCost(ticketId, costUsd)` method.
 
 ---
 
-### Issue 2: ⚠️ Adoption overwrites existing CLAUDE.md
+### Issue 2: Adoption overwrites existing CLAUDE.md
 
 **Priority:** CRITICAL
-**Status:** ✅ COMPLETED - PR #6 (Commit: d821fd6)
+**Status:** ✅ COMPLETED — PR #6 (Commit: d821fd6)
 
-**Problem:** Users lose their custom configuration when adopting blueprint
+**Problem:** Users lost their custom CLAUDE.md configuration when adopting the blueprint.
 
-**Solution:**
-- Implement smart merge in adopt.sh:
-  - Detect existing CLAUDE.md
-  - Parse user's existing sections
-  - Append blueprint sections with markers: `### BEGIN BLUEPRINT` / `### END BLUEPRINT`
-  - Preserve user preferences (model, custom instructions, etc.)
-- Add `--merge-strategy` flag: `overwrite` | `merge` | `backup-only`
-
-**Implementation Notes:**
-```bash
-# adopt.sh enhancement
-if [[ -f "$PROJECT_ROOT/CLAUDE.md" ]]; then
-    log "Existing CLAUDE.md found. Merging with blueprint..."
-
-    # Backup original
-    cp CLAUDE.md "CLAUDE.md.backup-$(date +%s)"
-
-    # Parse user sections (everything before any blueprint markers)
-    awk '/### BEGIN BLUEPRINT/,/### END BLUEPRINT/{next} {print}' CLAUDE.md > CLAUDE.user.tmp
-
-    # Append blueprint sections with markers
-    cat CLAUDE.user.tmp > CLAUDE.md.new
-    echo "" >> CLAUDE.md.new
-    echo "### BEGIN BLUEPRINT" >> CLAUDE.md.new
-    cat "$BLUEPRINT_RESOLVED/templates/CLAUDE.md.$FRAMEWORK" >> CLAUDE.md.new
-    echo "### END BLUEPRINT" >> CLAUDE.md.new
-
-    mv CLAUDE.md.new CLAUDE.md
-    rm CLAUDE.user.tmp
-
-    log "✓ Merged CLAUDE.md (backup saved)"
-fi
-```
+**What was implemented:** Smart merge in `adopt.sh` — detects an existing CLAUDE.md, preserves the user's existing content, appends blueprint sections with `### BEGIN BLUEPRINT` / `### END BLUEPRINT` markers, backs up the original before touching it.
 
 ---
 
 ### Issue 3: Configuration backup files not gitignored
 
 **Priority:** CRITICAL (Quick Fix)
-**Status:** ✅ COMPLETED - PR #6 (Commit: 334f450)
+**Status:** ✅ COMPLETED — PR #6 (Commit: 334f450)
 
-**Problem:** `settings.json.backup-*`, `agents.backup/` add clutter to repo
+**Problem:** `settings.json.backup-*`, `agents.backup/` added clutter to the repo.
 
-**Solution:**
-- Add to `.gitignore`: `*.backup-*`, `agents.backup/`
-- Update adopt.sh to create backups in `~/.claude-agency/backups/` instead of project root
-- Add cleanup command: `./scripts/cleanup-backups.sh --older-than 30d`
-
-**Implementation:**
-```bash
-# .gitignore additions
-*.backup-*
-agents.backup/
-.claude/settings.json.backup-*
-```
+**What was implemented:** Added `*.backup-*`, `agents.backup/`, `.claude/settings.json.backup-*` to `.gitignore`.
 
 ---
 
 ### Issue 4: Leftover .claude-flow/ directory
 
 **Priority:** CRITICAL (Quick Fix)
-**Status:** ✅ COMPLETED - PR #5 (Commit: 5a133e1) - Already merged to master
+**Status:** ✅ COMPLETED — PR #5 (Commit: 5a133e1), already merged to master
 
-**Problem:** From removed submodule, contains stale daemon.pid and logs
+**Problem:** Leftover from a removed submodule; contained a stale daemon.pid and logs.
 
-**Solution:**
-- Remove the directory: `rm -rf .claude-flow/`
-- Document in CHANGELOG that this directory is obsolete and was removed
-
-**Action:** Can be fixed immediately
-
-**Note:** No need to gitignore since the directory is being permanently removed and won't be recreated.
+**What was implemented:** Directory removed; documented as obsolete in CHANGELOG.
 
 ---
 
 ### Issue 5: No integration tests
 
-**Priority:** MEDIUM
+**Priority:** MEDIUM (fixed ahead of schedule 2026-07-19 as a force-multiplier protecting the other safety fixes, under the now-retired tier system)
+**Status:** ✅ COMPLETED (2026-07-19), combined with Adoption Issue 2 (monorepo auto-detection) since both are test-coverage work over the same script
 
-**Problem:** Bootstrap, adoption, orchestrator, dashboard have no automated testing
+**Problem:** Bootstrap, adoption, orchestrator, and dashboard had no automated testing beyond the pre-existing `scripts/test-adopt.sh` (single-framework only).
 
-**Solution:**
-- Add `tests/integration/` directory
-- Create test suite:
-  - `test-bootstrap.sh` - Verify all tools install correctly
-  - `test-adopt.sh` - Test adoption in sample repos (single framework + monorepo)
-  - `test-orchestrator.sh` - Mock ticket sources, verify spawning/budget
-  - `test-dashboard.sh` - Verify state derivation from events.jsonl
-- Add CI workflow (GitHub Actions) to run tests on PR
+**What was implemented** (`node --test` rather than more bash scripts, matching the pattern already used elsewhere, plus a GitHub Actions workflow):
+- `tests/adopt/monorepo-detection.test.mjs` (15 tests) — root-level detection for all 4 frameworks, subdirectory scanning, multi-framework monorepo detection with dedup, `--frameworks` explicit list, unknown-framework rejection, plus 3 tests locking in real limitations as documented facts (no recursion past one subdirectory level, no non-standard subdirectory names, no nx/lerna/pnpm-workspace marker recognition).
+- `tests/bootstrap/bootstrap.test.mjs` (7 tests) — `bootstrap.sh` installs real global tools with network dependencies, so a real run is never exercised in CI; covers `--dry-run` side-effect-freedom, `--help`, flag combination/override behavior, and CLI presence checks.
+- `.github/workflows/tests.yml` — new CI workflow: `unit-and-integration` runs the full `node --test tests/` suite, `adopt-shell-tests` runs `scripts/test-adopt.sh`.
+- Did **not** write separate `test-orchestrator.sh`/`test-dashboard.sh` scripts — that ground was already covered by `tests/orchestrator/` and `tests/dashboard/`.
 
-**Implementation Notes:**
-```yaml
-# .github/workflows/integration-tests.yml
-name: Integration Tests
-on: [pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Run integration tests
-        run: |
-          ./tests/integration/test-bootstrap.sh
-          ./tests/integration/test-adopt.sh
-```
+**Two pre-existing `adopt.sh` bugs found while adding this coverage, fixed as an immediate follow-up (2026-07-20):**
+1. **macOS-only:** nested-mode detection failed with "Cannot resolve blueprint location" when the OS temp directory was reached through a symlink (`/var` → `/private/var`) — `SCRIPT_PATH` resolved via a non-canonicalizing `cd && pwd` while `PROJECT_ROOT` always canonicalized, so the two never string-matched. **Fix:** both now resolve via `pwd -P`.
+2. **OS-agnostic:** `adopt.sh --uninstall`/`--doctor` validated `FRAMEWORKS.length > 0` unconditionally before dispatching on `ACTION`, dying with "No frameworks specified" even though neither action's logic references frameworks. **Fix:** the auto-detect/validate block is now gated on `[[ "$ACTION" == "adopt" ]]`.
+
+**Tests:** `tests/adopt/known-bugs.test.mjs` (5 tests, rewritten from `test.todo()` trackers to real assertions) covering both bugs plus a guard confirming the default `adopt` action still correctly requires a framework flag. `scripts/test-adopt.sh` now passes all 37 assertions (previously 5 failing).
 
 ---
 
@@ -188,177 +111,112 @@ jobs:
 ### Issue 1: Budget enforcement uses event-count proxy
 
 **Priority:** HIGH
-**Status:** ✅ COMPLETED - PR #6 (Commit: a43694a)
+**Status:** ✅ COMPLETED — PR #6 (Commit: a43694a)
 
-**Problem:** Not actual token costs; must manually calibrate `cost_per_event_usd`
+**Problem:** Budget used an event-count proxy, not actual token costs, requiring manual calibration of `cost_per_event_usd`.
 
-**Location:** `orchestrator/budget.mjs:55`
-
-**Solution:**
-- Modify spawn.mjs to use `claude -p --output-format stream-json`
-- Parse final result event to extract `total_cost_usd`
-- Update budget.mjs to track real costs: `addRealCost(ticketId, costUsd)`
-- Keep event-based proxy as fallback for non-JSON modes
-- Document calibration in README if fallback used
-
-**Related:** Cross-Cutting Issue #1
+**What was implemented:** `spawn.mjs` uses `claude -p --output-format stream-json`, parses the final result event for `total_cost_usd`, and calls `budget.addRealCost(ticketId, costUsd)`. Event-based proxy kept as fallback for non-JSON modes. (See Cross-Cutting Issue 1.)
 
 ---
 
 ### Issue 2: No force-kill on halt
 
-**Priority:** MEDIUM
+**Priority:** MEDIUM (fixed ahead of schedule 2026-07-19 under the now-retired tier system)
+**Status:** ✅ COMPLETED (2026-07-19)
 
-**Problem:** Kill switch marks tickets halted but doesn't terminate processes
+**Problem:** The kill switch marked tickets halted but never actually terminated the spawned process.
 
-**Location:** `orchestrator/server.mjs`
+**Location:** `orchestrator/server.mjs`, new `orchestrator/killer.mjs`
 
-**Solution:**
-- Store spawned PIDs in registry.json
-- When KILLSWITCH triggered, send SIGTERM to all PIDs
-- After 30s grace period, send SIGKILL to stragglers
-- Log terminations to orchestrator.log
-- Add `--force-kill` flag to stop-orchestrator.sh
+**What was implemented** (PID tracking already existed via `registry.update()` in the intake tick — only the "actually kill it" half was missing):
+- New `orchestrator/killer.mjs` (`Killer` class), kept separate from `server.mjs` so it's independently unit-testable.
+- `Killer.kill(ticketId, pid, reason)` sends `SIGTERM` to **the negative pid** (the process group) — `spawn.mjs` launches agents with `detached: true`, so signaling only the top-level pid would leave subprocesses (git, test runners) alive. Escalates to `SIGKILL` after `budget.kill_grace_ms` (default 30000ms) if still alive.
+- Wired into two places: `onEvent()`'s halt check now calls `killer.kill()` immediately, and a new `killer.sweep(budget)` runs every tick regardless of whether a fresh hook event arrived — this is what catches a **hung** agent that stops emitting events entirely, not just one that keeps talking after being halted.
+- Did **not** add a `--force-kill` flag to `stop-orchestrator.sh` — that stops the daemon itself, a different concern from killing spawned ticket agents; the kill switch already covers the latter.
 
-**Implementation Notes:**
-```javascript
-// registry.mjs - Add PID tracking
-claim(ticketId, meta) {
-  this.data.tickets[ticketId] = {
-    ...meta,
-    pid: null, // Will be set by spawn
-    status: 'claimed'
-  };
-}
+**Tests:** `tests/orchestrator/killer.test.mjs` (10 unit tests against injected fakes), `killer.integration.test.mjs` (2 tests using real detached child-process trees, proving the group signal reaches a grandchild and that SIGKILL lands on a process that traps SIGTERM), `killer.wiring.test.mjs` (1 smoke test against the real `Registry`/`Budget` classes). All 13 pass.
 
-// spawn.mjs - Store PID
-const result = spawnTicketAgent(ticket, spec, logDir);
-registry.setPid(ticket.id, result.pid);
-
-// Kill switch handler
-function killAllAgents() {
-  for (const ticket of registry.getActive()) {
-    if (ticket.pid) {
-      process.kill(ticket.pid, 'SIGTERM');
-      setTimeout(() => {
-        try { process.kill(ticket.pid, 'SIGKILL'); } catch {}
-      }, 30000);
-    }
-  }
-}
-```
+**Known gap (acceptable):** no PID-liveness verification across orchestrator restarts — in-memory grace-period tracking is lost on daemon restart, matching existing "lost on restart" behavior already documented for stuck-detection's event window. Low risk since a restart is a rare, operator-driven event.
 
 ---
 
 ### Issue 3: No retry logic
 
 **Priority:** HIGH
-**Status:** ✅ COMPLETED - PR #6 (Commit: eba1167)
+**Status:** ✅ COMPLETED — PR #6 (Commit: eba1167)
 
-**Problem:** If spawn crashes early, ticket stuck in `in_progress` forever
+**Problem:** If a spawn crashed early, the ticket stayed stuck in `in_progress` forever.
 
-**Solution:**
-- Add retry config to orchestrator.json:
-  ```json
-  "retry": {
-    "max_attempts": 3,
-    "backoff_ms": [5000, 30000, 300000]
-  }
-  ```
-- Track attempt count in registry
-- Exponential backoff between retries
-- Notify Slack after final failure
-- Mark ticket as `failed` after max attempts
+**What was implemented:** Retry config in `orchestrator.json` (`max_attempts`, exponential `backoff_ms`), attempt count tracked in the registry, Slack notification after final failure, ticket marked `failed` after max attempts.
 
 ---
 
-### Issue 4: GitHub-only source support
+### Issue 4: ClickUp/Linear/Jira sources not implemented
 
-**Priority:** MEDIUM
+**Priority:** ~~MEDIUM~~ → ~~LOW~~ (downgraded 2026-07-20) → completed 2026-07-21/22
+**Status:** ✅ COMPLETED (2026-07-21/22)
 
-**Problem:** ClickUp/Linear/Jira mentioned in docs but not implemented
+**Problem:** ClickUp/Linear/Jira mentioned in docs but not implemented. (Correction 2026-07-19: the orchestrator was never strictly "GitHub-only" — `orchestrator/sources/filesystem.mjs` already existed for local JSON-file tickets — but no real issue-tracker API integration beyond GitHub existed.)
 
 **Location:** `orchestrator/sources/`
 
-**Solution:**
-- Implement `sources/clickup.mjs` following github.mjs pattern
-- Implement `sources/linear.mjs`
-- Implement `sources/jira.mjs`
-- Document API token setup for each in orchestrator/README.md
-- Add example configs to orchestrator.example.json
+**What was implemented:**
+- `sources/clickup.mjs` — `fetchClickUp(cfg)`, polling ClickUp's v2 REST API (`GET /team/{team_id}/task`, team-scoped). Built and empirically verified against a real live ClickUp workspace (real API token, real tasks) — confirmed exact pagination (`page=N` + `last_page` boolean), that `statuses[]`/`assignees[]` must be repeated query params, and real 401 behavior on a bad token. The original design sketch for this wasn't usable as-is (`fetch()` doesn't take a `params` option, and it never called `.json()`).
+- `sources/linear.mjs` — `fetchLinear(cfg)`, polling Linear's GraphQL API. Linear's docs were unavailable/redirected during development, so the schema (`identifier`/`url`/`state.name`/`labels.nodes.name`, `IssueFilter.team.key.eq`, Relay-style `pageInfo.hasNextPage`/`endCursor` pagination) was confirmed via live, unauthenticated schema introspection directly against `https://api.linear.app/graphql`. A fake API key against the real endpoint confirmed auth failures return an actual HTTP 401 with a GraphQL `errors[]` body.
+- `sources/jira.mjs` — `fetchJira(cfg)`, polling Jira Cloud's REST API v3 `/search` with JQL, Basic auth (email + API token, base64). Verified the response envelope and field shape (`key`, `fields.summary`, `fields.labels` as a plain string array, `fields.status.name`) against a real, public Jira instance (issues.apache.org) — that instance runs Jira Server/Data Center on the v2 endpoint, not Cloud v3, since no private Cloud account was available; flagged explicitly rather than silently assumed identical. Known gap: Jira Cloud v3 can return `fields.description` as an Atlassian Document Format object rather than a plain string — this module treats any non-string description as absent rather than guess at ADF-to-text extraction.
+- All three wired into `intakeTick()`'s source dispatch, read-only (no claim/close write-back — unlike `beads`, none of these have a dependency-graph concept to keep in sync).
+- Documented in `orchestrator/README.md` and `config/orchestrator.example.json` (disabled-by-default examples, tokens always by env-var name, never inline).
 
-**Implementation Pattern:**
-```javascript
-// sources/clickup.mjs
-export async function fetchClickUp(config) {
-  const response = await fetch(
-    `https://api.clickup.com/api/v2/team/${config.team_id}/task`,
-    {
-      headers: { 'Authorization': config.api_token },
-      params: { 'statuses[]': config.status_filter }
-    }
-  );
+**Tests:** `clickup-source.test.mjs` (13), `linear-source.test.mjs` (10), `jira-source.test.mjs` (12) — 35 total, mocking `global.fetch` with response shapes copied from real API calls/introspection. Covers shape mapping, pagination, limit-truncation short-circuiting, filter construction, and error paths.
 
-  return response.tasks.map(t => ({
-    id: t.id,
-    title: t.name,
-    url: t.url,
-    labels: t.tags.map(tag => tag.name),
-    source: 'clickup',
-    source_name: config.name
-  }));
-}
-```
+**Unplanned addition, same pickup:** `sources/beads.mjs` — integrates [beads](https://github.com/gastownhall/beads), a dependency-graph task tracker, as an orchestrator source. Not one of the original 45 tracked issues; added because the user asked about using beads as a task-management backend. Unlike ClickUp/Linear/Jira, includes claim/close write-back (`bd update <id> --claim`, `bd close <id> --reason`) so beads' own graph stays in sync — a ticket only shows as "ready" once its dependencies are closed. Verified end-to-end against a real local `bd` install: created two dependent tasks, confirmed only the unblocked one showed as ready, claimed and closed it, confirmed the dependent then became ready. `beads-source.test.mjs` (13 tests, mocked `bd` binary). Also surfaced two real bugs while documenting this for end users: `bd init` (without `--stealth`) auto-commits its own files to the target repo unreviewed — the blueprint's own README now documents `bd init --quiet --stealth` instead; and `bd dep add <blocked-id> <blocker-id>`'s argument order is the reverse of the intuitive reading, confirmed via live testing before documenting it.
 
 ---
 
 ### Issue 5: Session→ticket correlation approximate
 
 **Priority:** LOW
+**Status:** ✅ COMPLETED (2026-07-22)
 
-**Problem:** Relies on branch slug if `CLAUDE_SESSION_ID` not set early enough
+**Problem:** Relied on a git-branch slug to match a live event back to its ticket if `CLAUDE_SESSION_ID` wasn't set early enough — `sessionToTicketId()` in `server.mjs` looked up `registry.spawned_session_id`, but nothing anywhere in the codebase ever wrote that field, so the exact-match path could never succeed and every ticket fell through to branch-slug matching.
 
-**Solution:**
-- Modify spawn.mjs to set `CLAUDE_SESSION_ID` env var before spawn
-- Use ticket_id as session ID for predictable correlation
-- Update event tailer to match on session_id first, branch as fallback
-- Log correlation method used for debugging
+**Note (confirmed earlier, still true):** adopting `beads` as a ticket source does **not** resolve this — beads has no concept of a live Claude Code session/process; this was purely a `spawn.mjs`/event-tailer correlation gap, orthogonal to which ticket source feeds the orchestrator.
+
+**What was implemented** (exactly the 3-item solution originally scoped, verified end-to-end against real hook scripts rather than assumed correct):
+- `orchestrator/spawn.mjs` now sets `env.CLAUDE_SESSION_ID = ticket.ticket_id` before spawning — Claude Code's hooks read this env var as the session id, so `.claude/hooks/agency-emit.sh` writes it straight into every event's `session_id` field. Set last in the env merge, so it deliberately overrides any `spec.env.CLAUDE_SESSION_ID` a team might configure — predictable correlation always wins.
+- `orchestrator/server.mjs` now writes `spawned_session_id: t.id` into the registry at the same point a ticket is claimed/spawned — the missing write half of `sessionToTicketId()`'s existing read logic.
+- `onEvent()` now logs (once per ticket, not per event) when correlation had to fall back to the branch-derived `ev.ticket` field instead of an exact `session_id` match — surfaces any ticket whose session wasn't spawned through this orchestrator, or spawned before this fix.
+- Also cleaned up a stale comment on `sessionToTicketId()` that described an older, no-longer-accurate fallback strategy ("match by ticket prefix or by any in_progress") that the function had already stopped doing.
+
+**Verified live, not just by code inspection:** spawned a real child process and confirmed `process.env.CLAUDE_SESSION_ID` inside it equals the ticket id exactly; ran the real `.claude/hooks/agency-emit.sh` under that env and confirmed the event it wrote to `events.jsonl` carries `"session_id":"<ticket_id>"` verbatim — the full chain (spawn → env var → real hook → event log) works end-to-end, not just in isolation.
+
+**Tests:** `tests/orchestrator/spawn.test.mjs` (4 tests) — `CLAUDE_SESSION_ID` set to the ticket id for a real spawned process, an explicit `spec.env.CLAUDE_SESSION_ID` is still overridden by the ticket id, `--dry-run` never actually spawns anything, and the rest of `process.env`/custom env vars still pass through unaffected. `server.mjs`'s own `sessionToTicketId()`/registry-wiring change was verified by direct code inspection rather than a new test (it isn't exported, matching how this file's other internal logic — `intakeTick()`, `onEvent()` — has been handled all session, since forcing an export solely for testability would be a bigger change than this fix warrants).
 
 ---
 
 ### Issue 6: Stuck detection may false-positive
 
-**Priority:** MEDIUM
+**Priority:** MEDIUM (fixed ahead of schedule, partially, 2026-07-19 under the now-retired tier system)
+**Status:** ✅ PARTIALLY COMPLETED (2026-07-19) — whitelist only, by deliberate scope decision (user chose to keep this ticket small rather than build all 4 original sub-items)
 
-**Problem:** 10min idle timeout aggressive for complex tasks
+**Problem:** 10-minute idle timeout too aggressive for complex tasks.
 
 **Location:** `orchestrator/stuck-detector.mjs`
 
-**Solution:**
-- Make all thresholds configurable in orchestrator.json
-- Increase default idle_timeout_ms to 20min (1200000)
-- Add `stuck_whitelist` config to exclude specific tickets from stuck detection
-- Log near-stuck warnings at 50%, 80% of threshold
-- Allow operator to mark ticket as "working normally" to reset timer
+**Scope decision — what was implemented vs. deferred:**
+- ✅ Configurable whitelist to exclude specific tickets from stuck detection — implemented.
+- ❌ Raise default idle_timeout_ms to 20min — not done; a separate judgment call about noise tolerance, left for a future ticket if still wanted.
+- ❌ Near-stuck warnings at 50%/80% of threshold — not done; would add Slack noise, working against the goal of this fix.
+- ❌ Operator "mark as working normally" reset endpoint — not done; bigger scope, needs a new dashboard API route.
 
-**Configuration Example:**
-```json
-"stuck": {
-  "idle_timeout_ms": 1200000,
-  "tool_loop_threshold": 5,
-  "thrashing_window": 50,
-  "whitelist": ["INFRA-123", "RESEARCH-*"]
-}
-```
+**What was implemented:**
+- New `isWhitelisted(ticket, whitelist)` export — glob-pattern matching against **both** the ticket id and its labels (not just id as the original example implied — real ticket ids like `gh:org/repo#42` or `fs:name:ticket-id` have no natural glob-able prefix, so labels are the more robust match target).
+- `detectStuck()` short-circuits to `null` if the ticket matches `config.stuck.whitelist`, checked right after the terminal-status skip.
+- `config/orchestrator.example.json` and `orchestrator/README.md` document the new field.
 
----
+**Incidental finding, not fixed (out of scope):** `last_event_at: 0` is treated as "no timestamp yet" by the idle-rule guard (`0` is falsy), so a ticket whose timestamp is ever persisted as exactly `0` would never trigger idle detection. Pre-existing behavior, now locked in as documented/tested rather than silently fixed.
 
-### Additional Enhancements
-
-- **Cost optimization alerts:** Notify at 80%/90% of per-ticket cap
-- **Ticket prioritization:** Process tickets with `priority:high` label first
-- **Spawn queue:** Queue tickets when budget hit instead of skipping, process when cap resets
-- **Graceful shutdown:** SIGTERM handler to cleanly stop all agents before exit
+**Tests:** `tests/orchestrator/stuck-detector.test.mjs` (19 tests) — 8 for `isWhitelisted()` alone, whitelist integration into `detectStuck()`, plus full regression coverage of the 4 pre-existing rules.
 
 ---
 
@@ -367,138 +225,59 @@ export async function fetchClickUp(config) {
 ### Issue 1: Not real-time
 
 **Priority:** HIGH
-**Status:** ✅ COMPLETED - PR #6 (Commit: 793dc5e)
+**Status:** ✅ COMPLETED — PR #6 (Commit: 793dc5e)
 
-**Problem:** Polls every 2s, rebuilds entire state from events.jsonl
+**Problem:** Polled every 2s, rebuilding entire state from `events.jsonl`.
 
-**Location:** `dashboard/server.mjs:49` (buildState function)
-
-**Solution:**
-- Implement WebSocket server in dashboard/server.mjs
-- Watch events.jsonl with fs.watch(), push new events to connected clients
-- Clients update state incrementally instead of replacing
-- Fallback to polling if WebSocket connection lost
-
-**Implementation Notes:**
-```javascript
-// Add WebSocket support
-import { WebSocketServer } from 'ws';
-
-const wss = new WebSocketServer({ server: httpServer });
-
-fs.watch(EVENTS, (eventType) => {
-  if (eventType === 'change') {
-    const newEvents = readNewEvents(); // Read only new lines
-    wss.clients.forEach(client => {
-      client.send(JSON.stringify({ type: 'events', data: newEvents }));
-    });
-  }
-});
-```
-
----
-
-### Issue 2: No authentication
-
-**Priority:** LOW
-
-**Problem:** Binds 127.0.0.1 only, assumes single operator on localhost
-
-**Solution:**
-- Add optional basic auth: username/password from env vars
-- Add `AGENCY_DASHBOARD_AUTH=user:pass` to config
-- Add middleware to check Authorization header
-- Document: "Leave unset for localhost-only, set for team use"
-- Consider SSO integration (OAuth2) in v2
+**What was implemented:** WebSocket server in `dashboard/server.mjs`, watching `events.jsonl` with `fs.watch()` and pushing new events to connected clients incrementally, with polling fallback if the WebSocket connection is lost.
 
 ---
 
 ### Issue 3: File-based inbox/outbox race conditions
 
-**Priority:** MEDIUM
+**Priority:** MEDIUM (fixed ahead of schedule 2026-07-19 under the now-retired tier system — the last of that system's safety/silent-failure-class fixes)
+**Status:** ✅ COMPLETED (2026-07-19)
 
-**Problem:** Potential race conditions with concurrent access
+**Problem:** Investigation found three distinct races, not one generic "concurrency" concern:
+1. `/api/unblock` wrote the inbox file via a direct `writeFileSync` — not atomic, a concurrent reader could observe a torn write.
+2. `agency-emit.sh` created the empty inbox placeholder via check-then-act (`[[ -f "$SLOT" ]] || : > "$SLOT"`) — a TOCTOU race.
+3. `inbox-check.sh`/`inbox-wait.sh` **read the inbox before archiving it** — a reply written in the gap between read and archive was silently lost. This was the most operator-visible failure mode (a quick follow-up correction vanishing).
 
-**Solution:**
-- Add file locking using `lockfile` or flock
-- Atomic writes: write to temp file, rename to final path
-- Add retry logic for locked files (3 attempts with 100ms delay)
-- Consider Redis-based inbox/outbox in v2 for true multi-operator support
+**What was implemented** (no `lockfile`/`flock` needed — POSIX `rename()` is already atomic):
+- New `writeFileAtomic()` helper in `dashboard/server.mjs` (temp file + `renameSync`), used by `/api/unblock`.
+- `agency-emit.sh`'s placeholder create now uses noclobber (`( set -C; : > "$SLOT" ) 2>/dev/null || true`).
+- `inbox-check.sh`/`inbox-wait.sh` reordered to **claim (mv to outbox) before reading**. A reply landing after the claim now just creates a fresh file for the next poll.
+- **Found and fixed a second bug while testing the reorder:** the archive filename used only `date +%s` (1-second resolution) — once claim-then-read made rapid consumption normal, two claims within the same second collided and silently overwrote each other's archived reply. Fixed with `date +%s%N` (nanoseconds) plus the shell's `$$` (PID).
+- Did **not** add file locking or pursue a Redis-based multi-operator inbox — out of scope, no evidence multi-operator support is needed.
+
+**Tests:** `tests/dashboard/inbox-race.test.mjs` (9 tests) and `tests/dashboard/unblock-atomic-write.test.mjs` (4 tests, against a real spawned server instance) — 13 total, including a dedicated regression guard hammering 5 rapid back-to-back claims to prove the archive-filename fix holds.
 
 ---
 
 ### Issue 4: O(n) performance degradation
 
 **Priority:** HIGH
-**Status:** ✅ COMPLETED - PR #6 (Commit: 9c71c31)
+**Status:** ✅ COMPLETED — PR #6 (Commit: 9c71c31)
 
-**Problem:** Re-reads entire events.jsonl per request (slow if >50MB)
+**Problem:** Re-read the entire `events.jsonl` per request (slow above ~50MB).
 
-**Location:** `dashboard/server.mjs:50`
-
-**Solution:**
-- Track last-read offset in memory: `Map<clientId, offset>`
-- Use fs.createReadStream with `start` option to read only new bytes
-- Parse only new lines, update state incrementally
-- Add rotation: when events.jsonl > 100MB, archive old events to events-YYYY-MM.jsonl
-
-**Implementation:**
-```javascript
-let lastReadOffset = 0;
-
-function readNewEvents() {
-  const stats = statSync(EVENTS);
-  if (stats.size <= lastReadOffset) return [];
-
-  const stream = createReadStream(EVENTS, {
-    start: lastReadOffset,
-    encoding: 'utf8'
-  });
-
-  const newLines = [];
-  // Parse new lines...
-
-  lastReadOffset = stats.size;
-  return newLines;
-}
-```
+**What was implemented:** In-memory last-read offset tracked per client, `fs.createReadStream` with a `start` option reads only new bytes, state updates incrementally.
 
 ---
 
 ### Issue 5: No agent output preview
 
 **Priority:** MEDIUM
+**Status:** ✅ COMPLETED (2026-07-20)
 
-**Problem:** Can't see what agent is doing without tailing logs manually
+**Problem:** Couldn't see what an agent was doing without manually tailing logs.
 
-**Solution:**
-- Add `/api/agent-log/:session_id` endpoint
-- Stream last 100 lines from `agent-logs/<ticket>.log`
-- Add "View Logs" button in dashboard UI next to each agent
-- Support live streaming: WebSocket sends new log lines as they arrive
+**What was implemented** (one deliberate scope cut — live WebSocket streaming — discussed with the user first):
+- New `GET /api/agent-log/:ticket` endpoint — reads the last N lines (default 100, capped 1000) from `agent-logs/<sanitized-ticket-id>.log`. Keyed by **ticket id**, not session id (that's what `spawn.mjs` actually writes per-file). Sanitization regex copied verbatim from `spawn.mjs`, which as a side effect makes path traversal impossible.
+- "View Logs" button in the dashboard's Tickets table, opening a modal that polls the endpoint every 2s while open.
+- Did **not** build live WebSocket streaming — a 2s polling refresh while the panel is open satisfies the actual need without the added complexity of per-ticket file watchers and client subscription bookkeeping.
 
----
-
-### Issue 6: No search/filter capability
-
-**Priority:** LOW
-
-**Problem:** Can't filter by ticket, agent type, or time range
-
-**Solution:**
-- Add filter UI controls: dropdowns for agent role, status; date range picker
-- Filter state in buildState() before returning
-- Add search box: filter events by keyword in tool/file/prompt
-- Save filter preferences in localStorage
-
----
-
-### Additional Enhancements
-
-- **Event export:** Add "Download CSV" button, format events for analysis
-- **Metrics dashboard:** Add charts using Chart.js: tickets over time, success rate, cost trends
-- **Mobile-responsive:** Use CSS media queries, test on phone
-- **Multi-user support:** Track operator assignments per ticket, show who replied
+**Tests:** `tests/dashboard/agent-log-and-stats.test.mjs` (7 tests, against a real spawned server) — last-N-lines correctness, 404 handling, path-traversal safety (verified with a real `../../../etc/passwd` request), the 1000-line cap.
 
 ---
 
@@ -506,123 +285,41 @@ function readNewEvents() {
 
 ### Issue 1: Profile switching is destructive
 
-**Priority:** MEDIUM
+**Priority:** MEDIUM (fixed 2026-07-20 under the now-retired tier system)
+**Status:** ✅ COMPLETED (2026-07-20)
 
-**Problem:** Moves agents out of `.claude/agents/`, hard to undo; creates untracked `agents.backup/`
+**Problem:** Switching profiles did `rm` then `cp` from an `agents.backup/` copy — an interrupted run between those steps left `.claude/agents/` empty, recoverable only by hand.
 
-**Location:** `scripts/switch-agents.sh:85-95`
+**Location:** `scripts/switch-agents.sh`
 
-**Solution:**
-- Change switch-agents.sh to use symlinks instead of moving files:
-  ```bash
-  # Instead of moving, create profile-specific directories:
-  .claude/agents-all/        # Contains all agents
-  .claude/agents/            # Symlinks to active agents only
-  ```
-- Update switch-agents.sh to:
-  - Remove symlinks in `.claude/agents/`
-  - Create new symlinks to profile-specific agents from `agents-all/`
-  - No files moved, fully reversible
-- Update adoption to populate `agents-all/` directory
+**What was implemented:**
+- `.claude/agents-all/` now holds canonical real `.md` files; `.claude/agents/` contains only symlinks into it.
+- One-time, idempotent migration built into the script itself — on first run, real files in `.claude/agents/` are moved into `agents-all/` automatically.
+- Switching profiles only ever adds/removes symlinks — real content is never touched, so an interrupted run at worst leaves `.claude/agents/` empty, and re-running any profile fully repairs it.
+- Safety guard not in the original spec: the symlink-clearing step checks `[ -L "$f" ]` first — a real (non-symlink) file found in `.claude/agents/` is left alone with a warning, never silently deleted.
 
-**Implementation:**
-```bash
-# switch-agents.sh (new approach)
-PROFILE=$1
-AGENTS_ALL="$PROJECT_ROOT/.claude/agents-all"
-AGENTS_ACTIVE="$PROJECT_ROOT/.claude/agents"
+**Critical follow-up bug, found via CI (2026-07-21/22):** the original symlink target was `$AGENT_FILE`, an **absolute path** (`$PROJECT_ROOT/.claude/agents-all/<name>.md`). Committed to git, this baked in the local dev machine's absolute path and broke the moment the repo was checked out anywhere else (e.g. a CI runner at `/home/runner/...` vs. local `/Users/mac/...`) — `cp` against the broken symlink failed outright. **Fixed** by symlinking to the literal relative path `../agents-all/<name>.md` instead. Re-generated all 6 committed symlinks. Two regression tests added: one asserting the literal relative-path string, one that actually renames the whole project directory and confirms symlinks still resolve.
 
-# Remove existing symlinks
-rm "$AGENTS_ACTIVE"/*.md 2>/dev/null || true
-
-# Create symlinks for profile agents
-for agent in $(jq -r ".profiles.$PROFILE[]" .claude/agents.profiles.json); do
-    ln -sf "$AGENTS_ALL/$agent.md" "$AGENTS_ACTIVE/$agent.md"
-done
-```
-
----
-
-### Issue 2: No agent version tracking
-
-**Priority:** LOW
-
-**Problem:** Can't tell which version of custom agent is active
-
-**Solution:**
-- Add version metadata to agent files:
-  ```markdown
-  <!-- agent-version: 2.1.0 -->
-  <!-- last-updated: 2026-06-15 -->
-  ```
-- Create `./scripts/agent-version.sh` to:
-  - Show current version of all agents
-  - List available versions from git history
-  - Rollback to previous version: `./scripts/agent-version.sh backend-dev 2.0.0`
-- Track agent versions in registry when ticket completes
-
----
-
-### Issue 3: Agent profiles hardcoded in JSON
-
-**Priority:** LOW
-
-**Problem:** Can't customize which agents available per profile without editing code
-
-**Solution:**
-- Make `.claude/agents.profiles.json` user-editable
-- Add validation in switch-agents.sh: verify all referenced agents exist
-- Add profile customization command:
-  ```bash
-  ./scripts/customize-profile.sh frontend --add security-specialist
-  ```
-- Document profile customization in docs/AGENT-PROFILES.md
+**Tests:** `tests/agents/switch-agents.test.mjs` (10 tests) — first-run migration, content preservation, profile-switch correctness, the core interrupted-run recovery fix, the non-symlink safety guard, unknown-profile rejection, idempotency, the two relative-symlink regression tests.
 
 ---
 
 ### Issue 4: No agent performance metrics
 
 **Priority:** MEDIUM
+**Status:** ✅ COMPLETED (2026-07-20), with one honest scope cut from the original spec
 
-**Problem:** Don't know which agents succeed/fail most
+**Problem:** No visibility into which agents succeed/fail most.
 
-**Solution:**
-- Track in registry.json per ticket:
-  ```json
-  "agents_used": ["architect", "backend-dev"],
-  "agent_results": {
-    "architect": {"status": "success", "tokens": 15000, "duration_ms": 45000},
-    "backend-dev": {"status": "success", "tokens": 22000, "duration_ms": 120000}
-  }
-  ```
-- Add analytics command: `./scripts/agent-stats.sh`
-- Show in dashboard: success rate, avg tokens, avg time per agent
-- Identify underperforming agents for improvement
+**Important finding before implementing:** the original spec's "agent_results: {status: success}" sketch assumes a per-agent success/failure signal that **does not exist anywhere in the event stream** — a failed subagent looks event-for-event identical to a succeeded one. Discussed with the user, who agreed to skip it rather than ship a misleading proxy number.
 
----
+**What was implemented instead** (real, honestly-derivable usage stats, computed live from the existing event stream, matching the pattern `orchestrator/digest.mjs` already uses):
+- New `orchestrator/agent-stats.mjs` — `buildAgentStats({events, since})` derives per-agent: distinct session count, distinct ticket count, tool-call volume (+ top-5 tools), average session duration. `--since` supports `24h`/`7d`/`30d`/`all`.
+- `./scripts/agent-stats.sh` — thin wrapper CLI.
+- New `GET /api/agent-stats?since=` endpoint reusing the same module.
+- The formatted table output explicitly notes no success/failure rate is shown and why.
 
-### Issue 5: Code-reviewer is superpowers symlink
-
-**Priority:** LOW
-
-**Problem:** If upstream updates break compatibility, workflow breaks
-
-**Solution:**
-- Pin superpowers version in bootstrap.sh
-- Test superpowers updates in staging before production
-- Add version check: warn if superpowers > tested version
-- Consider vendoring code-reviewer.md if stability critical
-- Document tested superpowers version in README
-
----
-
-### Additional Enhancements
-
-- **Agent marketplace:** Share custom agents via GitHub gists or dedicated repo
-- **Conditional agent loading:** Parse implementation plan, load only mentioned agents
-- **Framework-specific agents:** `backend-dev-python.md`, `backend-dev-node.md`
-- **Custom agent scaffolding:** `./scripts/new-agent.sh <name>` generates template
-- **Agent composition:** Allow architect to spawn tech-lead sub-agent
+**Tests:** `tests/orchestrator/agent-stats.test.mjs` (12 tests) — counting correctness, duration averaging, window filtering, and an explicit "HONESTY CHECK" test asserting no `success`/`status`/`fail` field ever appears in the output.
 
 ---
 
@@ -631,259 +328,110 @@ done
 ### Issue 1: Bootstrap doesn't verify success
 
 **Priority:** HIGH
-**Status:** ✅ COMPLETED - PR #6 (Commit: 02f6319)
+**Status:** ✅ COMPLETED — PR #6 (Commit: 02f6319)
 
-**Problem:** Uses `|| warn` fallbacks but continues; could result in broken setup
+**Problem:** Used `|| warn` fallbacks but continued regardless, risking a silently broken setup.
 
-**Location:** `scripts/bootstrap.sh:19-48`
+**What was implemented:** `--strict` mode (default; exits on any failure), `--permissive` to continue on warnings, post-install verification of each installed tool, and a final ✓/✗/⚠ summary.
 
-**Solution:**
-- Add `--strict` mode: exit on any failure instead of warning
-- Add `--verify` mode: after installation, test each tool:
-  ```bash
-  claude --version || die "Claude Code not working"
-  ast-grep --version || die "ast-grep not working"
-  pre-commit --version || die "pre-commit not working"
-  graphify --version || die "graphify not working"
-  ```
-- Default to strict mode, add `--permissive` to continue on warnings
-- Print summary at end: ✓ installed / ✗ failed / ⚠ skipped
+**Follow-up fix (2026-07-20, found via CI):** `bootstrap.sh` required the `claude`/`npx` CLIs to be present even under `--dry-run` — exactly the case `--dry-run` exists to support on a fresh machine with nothing installed yet. Fixed by gating the prerequisite checks on `[[ "$DRY_RUN" == "false" ]]`. The pre-existing test asserting the old (buggy) behavior was rewritten to assert the fix instead.
 
 ---
 
 ### Issue 2: Monorepo auto-detection untested
 
-**Priority:** MEDIUM
+**Priority:** MEDIUM (test coverage added 2026-07-19 under the now-retired tier system)
+**Status:** ✅ PARTIALLY COMPLETED (2026-07-19) — test coverage added; detection heuristic itself unchanged, by deliberate scope decision (this was a coverage-only ticket)
 
-**Problem:** Heuristics may fail in deeply nested or unusual structures
+**Problem:** Detection heuristics might fail in deeply nested or unusual repo structures.
 
-**Location:** `scripts/adopt.sh:200-350`
+**Location:** `scripts/adopt.sh` (`detect_frameworks()`)
 
-**Solution:**
-- Add test suite in `tests/monorepo-detection/`:
-  - Sample repos with various structures
-  - Test cases: nx monorepo, lerna, pnpm workspaces, nested Django apps
-- Add `--debug-detection` flag to show detection logic
-- Add override: `--frameworks "python,nextjs"` bypasses detection
-- Document known limitations
+**What was found, confirmed by test, and left as documented limitations (not fixed):**
+- Detection is a single-level scan of 6 hardcoded subdirectory names — no recursion; a framework 2+ levels deep is invisible to it.
+- Non-standard subdirectory names are never scanned.
+- nx (`nx.json`), lerna (`lerna.json`), and pnpm-workspace (`pnpm-workspace.yaml`) markers are not recognized at all — an nx monorepo's root `package.json` (with a `workspaces` field but no `next`/`@nestjs/core` dependency) just falls through to the generic "node" bucket, missing the actual monorepo structure entirely.
+
+**What already worked and is now locked in by test** (the original "may fail" framing undersold this): `--frameworks "python,nextjs"` was already implemented before this ticket touched the file; root+subdirectory combination detection with dedup works correctly for the 6 supported names.
+
+**Not done:** a `--debug-detection` flag — deferred, since the new tests already document detection behavior precisely without needing a new CLI flag. Actually making nx/lerna/pnpm-workspace/deep-nesting work is a separate, larger fix left as a finding for a future ticket.
+
+**Tests:** combined with Cross-Cutting Issue 5's `tests/adopt/monorepo-detection.test.mjs` (15 tests) above.
 
 ---
 
 ### Issue 3: No adoption preview mode
 
 **Priority:** MEDIUM
+**Status:** ✅ COMPLETED (2026-07-20), one scope cut discussed with the user before implementing
 
-**Problem:** Can't see what would change before applying
+**Problem:** No way to see what would change before applying adoption.
 
-**Solution:**
-- Enhance `--dry-run` to show:
-  ```
-  Would create:
-    .claude/settings.json
-    .claude/agents/ (6 agents)
-    CLAUDE.md (merged)
-  Would modify:
-    .gitignore (+3 lines)
-  Would symlink:
-    .claude/skills/ -> ~/.claude/plugins/cache/superpowers/skills
-  ```
-- Add `--diff` flag: show actual diff for modified files
-- Add confirmation prompt: "Proceed? [y/N]"
+**What was implemented:**
+- New `--diff` flag on `adopt.sh`, combined with `--dry-run` — computes the real merge/overwrite result into a temp buffer even during a dry run and shows a real `diff -u` against the existing file for CLAUDE.md (all three merge strategies).
+- Fixed an adjacent bug found while implementing this: "Adoption complete" messages printed even during `--dry-run`, falsely implying something had been written. Now prints "DRY RUN complete — nothing was written."
+- Did **not** add the "Would create:/Would modify:/Would symlink:" categorized summary — existing per-operation `DRY:` lines (now with diffs attached) already communicate this.
+- Did **not** add a "Proceed? [y/N]" confirmation prompt — discussed with the user first: `adopt.sh` is invoked non-interactively by the CI test suite with no bypass flag, so a blocking prompt would hang every automated invocation. `--dry-run --diff` was judged sufficient.
 
----
-
-### Issue 4: Adopt script is complex (482 lines)
-
-**Priority:** LOW
-
-**Problem:** Many edge cases, hard to debug
-
-**Solution:**
-- Refactor into smaller functions with single responsibilities
-- Extract validation logic into separate script: `lib/validate-adoption.sh`
-- Extract symlink logic into: `lib/create-symlinks.sh`
-- Add debug logging: `--verbose` shows each step with timing
-- Add unit tests for each function
-
----
-
-### Issue 5: No uninstall validation
-
-**Priority:** LOW
-
-**Problem:** Doesn't verify all blueprint artifacts actually removed
-
-**Solution:**
-- After uninstall, verify:
-  ```bash
-  [[ ! -e .claude ]] || warn "/.claude still exists"
-  [[ ! -L .git/hooks/pre-commit ]] || warn "pre-commit hook still linked"
-  grep -q "claude-agency" .gitignore && warn ".gitignore still has blueprint entries"
-  ```
-- Show summary: "✓ Removed X files, ✗ Y files remain"
-- Add `--force` to remove even user-modified files (with confirmation)
+**Tests:** part of `tests/adopt/precommit-and-preview.test.mjs`'s 10 tests (5 for this issue, 5 for Issue 6 below) — no-diff behavior unchanged, real diff shown for the CLAUDE.md merge case (file on disk confirmed untouched), diff for `--merge-strategy overwrite`, corrected completion messages.
 
 ---
 
 ### Issue 6: Pre-commit config selection manual
 
 **Priority:** MEDIUM
+**Status:** ✅ COMPLETED (2026-07-20)
 
-**Problem:** 6 different templates, user must choose correctly
+**Problem:** 6 different pre-commit templates, user had to choose correctly by hand.
 
-**Solution:**
-- Auto-detect from project files:
-  ```bash
-  if [[ -f pyproject.toml ]]; then
-    template="python"
-  elif [[ -f package.json ]]; then
-    template="node"
-  fi
-  ```
-- For monorepo, merge relevant sections from multiple templates
-- Add `--precommit-template` override for manual selection
-- Validate template matches detected frameworks
+**Important finding before implementing:** most of this was already done — `generate_precommit_config()` already auto-detects from the framework(s) passed to `adopt.sh`, including a real merged config with workspace-path filters for monorepos. The only genuinely missing piece was an override for when auto-detection guesses wrong.
 
----
+**What was implemented:** New `--precommit-template <python|node|merged>` flag, overriding auto-detection. Warns (doesn't block) on a mismatch with detected frameworks, since an explicit override is intentional. `merged` forces the multi-framework generator even for a single detected framework.
 
-### Additional Enhancements
-
-- **Interactive wizard:** CLI prompts guide through all choices with explanations
-- **Stack-specific templates:** `--stack django-react` pre-configures both frameworks
-- **Adoption snapshots:** Timestamped backup before changes, easy restore with `./scripts/restore-snapshot.sh <timestamp>`
-- **Enhanced doctor:** Check for conflicting configs, orphaned symlinks, version mismatches
+**Tests:** the other 5 of `precommit-and-preview.test.mjs`'s 10 tests — forcing a mismatched template (with warning), forcing a matching template (no warning), forcing `merged` on a single-framework project, rejecting an invalid value, regression guards for plain auto-detection.
 
 ---
 
 ## 5. Token Optimization (Context Reduction)
 
-### Issue 1: Savings projections unvalidated
-
-**Priority:** MEDIUM
-
-**Problem:** "70-90% reduction" is theoretical, not measured in practice
-
-**Location:** `README.md:43`, `docs/TOKEN-OPTIMIZATION.md`
-
-**Solution:**
-- Add token tracking to measure actual savings:
-  ```bash
-  # Before optimization
-  TOKENS_BEFORE=$(grep total_cost_usd session-before.json)
-  # After optimization
-  TOKENS_AFTER=$(grep total_cost_usd session-after.json)
-  SAVINGS=$((100 * (TOKENS_BEFORE - TOKENS_AFTER) / TOKENS_BEFORE))
-  echo "Saved: $SAVINGS%"
-  ```
-- Run benchmark suite on sample tasks
-- Update docs with actual measured savings
-- Add per-project savings tracking in registry
-
----
-
 ### Issue 2: No automatic profile detection
 
-**Priority:** MEDIUM
+**Priority:** MEDIUM (fixed 2026-07-20, worked on ahead of Token Optimization Issues 1 and 6 by explicit user decision)
+**Status:** ✅ COMPLETED (2026-07-20)
 
-**Problem:** User must manually choose profile; wrong choice wastes tokens or breaks workflow
+**Problem:** User had to manually choose a profile; a wrong choice wasted tokens or broke the workflow.
 
-**Solution:**
-- Implement architect-driven detection (already documented in CHANGELOG):
-  - Architect reads ticket description
-  - Analyzes: frontend? backend? database? infra?
-  - Recommends profile: `minimal` | `frontend` | `backend` | `fullstack`
-  - User confirms or overrides
-- Add to `/ticket` workflow before Phase 1 (planning)
-- Log profile choice and rationale to events.jsonl
+**Important finding before implementing:** the CHANGELOG already *claimed* profile detection was done. Investigation found `.claude/commands/ticket.md` actually had two separate, contradictory prose-only mechanisms — a soft Phase 0 warning, and a completely different Phase 1 instruction to hard-STOP the entire workflow if the profile looked insufficient. Neither was backed by real detection logic; both were freeform text with no test coverage and no logging.
+
+**What was implemented** (a real, testable script, replacing both prose mechanisms with one clear step):
+- New `.claude/hooks/detect-profile.sh <ticket-text> [current-profile]` — keyword-based, deterministic. Categories: frontend, backend, devops, data. Single category → that profile; frontend+backend → `fullstack`; 0 categories → `minimal`; any other combo → `ticket`.
+- Emits a `profile_detected` event to `events.jsonl` with the recommendation and match/mismatch against the current profile.
+- `ticket.md` rewritten: one profile check in Phase 0, calling the script; Phase 1's duplicate hard-STOP removed. On mismatch, now asks the user to `switch` or `continue` rather than force-exiting.
+- **Two real logic bugs found via testing, fixed before shipping:** a greedy `pipeline.*deploy` regex that swallowed most of a sentence as a "keyword" (removed as redundant); a branch-ordering bug where single-category checks ran before the "exactly 2 categories" check, silently dropping a matched category (e.g. a frontend+devops ticket losing its devops signal).
+
+**Tests:** `tests/hooks/detect-profile.test.mjs` (17 tests) — one per named profile outcome, edge cases, both regression tests for the bugs found, stdout/stderr separation, event logging, missing-argument handling.
 
 ---
 
 ### Issue 3: Graphify not incremental by default
 
 **Priority:** LOW
+**Status:** ✅ COMPLETED (2026-07-21)
 
-**Problem:** Must manually re-index after large changes
+**Problem:** Had to manually re-index after large changes.
 
-**Solution:**
-- Add git post-commit hook:
-  ```bash
-  # .git/hooks/post-commit
-  graphify update --incremental
-  ```
-- Install hook automatically in adopt.sh
-- Add config: skip if commit < 5 files changed (avoid overhead)
-- Log updates to graphify.log
+**Important finding before implementing:** the vendored `graphify` tool already ships exactly what this issue asks for, better than the original spec assumed — `graphify hook install` installs **both** post-commit and post-checkout git hooks (not just post-commit), is idempotent, respects `core.hooksPath` (Husky compatibility), and calls an AST-only, no-LLM, per-file-cached rebuild. `docs/ADVANCED.md` already explained *why* this was practical but never mentioned one was actually available — that was the real, narrow gap.
 
----
+**What was implemented:**
+- `adopt.sh` now calls `graphify hook install` during adoption, non-fatal if graphify is absent or the call fails, skipped in `--dry-run`.
+- New `--no-graphify-hook` opt-out flag, mirroring `--no-precommit`.
+- `docs/ADVANCED.md` updated with the new default behavior and opt-out flag.
+- Did **not** implement the spec's literal `graphify update --incremental` command — it doesn't exist in the real CLI; the real equivalent (`graphify hook install`) does more, with battle-tested logic already in place.
+- Did **not** implement a file-count threshold or a dedicated log file — the real hook already exits on zero changed files and per-file SHA256 caching handles any commit size; stdout progress output was judged sufficient.
 
-### Issue 4: Template library (Phase 2) incomplete
+**Verification note:** this environment's Python (3.9.6) predates graphify's own `>=3.10` requirement, so the real CLI couldn't be pip-installed here. Verified via a Python-3.9-compatibility monkeypatch of the real vendored hook-install logic, plus a shell-script mock `graphify` binary for the automated test suite.
 
-**Priority:** LOW
-
-**Problem:** Mentioned in docs but no templates exist
-
-**Location:** `docs/TOKEN-OPTIMIZATION.md:52`
-
-**Solution:**
-- Create `templates/code-patterns/`:
-  - `api-endpoint.py` - FastAPI endpoint template
-  - `api-endpoint.ts` - Express/NestJS endpoint template
-  - `react-component.tsx` - React component with props/types
-  - `db-migration.py` - Alembic migration template
-  - `dockerfile.template` - Multi-stage Docker build
-- Add command: `claude "create API endpoint" --use-template api-endpoint.py`
-- Document template variables and usage
-
----
-
-### Issue 5: Module batching not implemented
-
-**Priority:** LOW
-
-**Problem:** Phase 2 feature incomplete
-
-**Solution:**
-- Implement in agent prompts:
-  ```markdown
-  When reading related files (e.g., model + serializer + view),
-  use a single Read tool call with multiple file paths instead of
-  separate calls. This reduces tool-use overhead.
-  ```
-- Add example to agent definitions
-- Measure savings in token tracking
-
----
-
-### Issue 6: No token usage analytics
-
-**Priority:** MEDIUM
-
-**Problem:** Can't measure which strategies actually work
-
-**Solution:**
-- Add analytics command: `./scripts/token-analytics.sh`
-- Show breakdown:
-  ```
-  Total tokens: 45,000
-    Files read: 15,000 (33%)
-    MCP calls: 8,000 (18%)
-    Agent prompts: 12,000 (27%)
-    System instructions: 10,000 (22%)
-
-  Top savings opportunities:
-    - 5 files read multiple times (3,000 tokens wasted)
-    - graphify not used for 8 queries (2,000 tokens wasted)
-  ```
-- Suggest optimizations based on analysis
-
----
-
-### Additional Enhancements
-
-- **Context usage visualization:** Generate HTML report with charts
-- **Adaptive .claudeignore:** Learn which files never useful, auto-add patterns
-- **Per-project optimization profiles:** Save winning strategies per repo
-- **Cost/benefit reporting:** "Profile X saved $Y but added Z minutes"
+**Tests:** `tests/adopt/graphify-hook.test.mjs` (6 tests) — real invocation during adoption, `--dry-run` never invokes it, `--no-graphify-hook` suppresses it, adoption succeeds with graphify absent or failing, correct pointer message when not installed.
 
 ---
 
@@ -892,114 +440,30 @@ done
 ### Issue 1: Pre-commit hook error handling fixed but undeployed
 
 **Priority:** CRITICAL (Already Fixed)
-**Status:** ✅ COMPLETED - PR #6 (Commit: 21b3c29)
+**Status:** ✅ COMPLETED — PR #6 (Commit: 21b3c29)
 
-**Problem:** We fixed in this session (`.claude/hooks/run-pre-commit.sh`), needs testing in production
+**Problem:** A fix existed for `.claude/hooks/run-pre-commit.sh` but needed testing/deployment.
 
-**Solution:**
-- Test the new hook with various scenarios:
-  - Pre-commit passes with no output
-  - Pre-commit fails with errors
-  - Pre-commit auto-fixes files
-  - Pre-commit not installed
-- Deploy to blueprint repo
-- Update adoption script to use new hook
-- Document in CHANGELOG
-
-**Files Changed:**
-- `.claude/hooks/run-pre-commit.sh` (new)
-- `.claude/settings.json:82` (updated to call new script)
-
----
-
-### Issue 2: Ticket detection regex may miss formats
-
-**Priority:** LOW
-
-**Problem:** Only tested on ClickUp/Linear/GitHub/Jira URL patterns
-
-**Location:** `.claude/hooks/detect-ticket.sh`
-
-**Solution:**
-- Make regex configurable in settings.json:
-  ```json
-  "hooks": {
-    "ticket_patterns": [
-      "https://app.clickup.com/t/[a-z0-9]+",
-      "https://linear.app/[^/]+/issue/[^/]+",
-      "custom_pattern_here"
-    ]
-  }
-  ```
-- Add team-specific patterns without code changes
-- Log matched patterns for debugging
-- Add validation: warn if pattern too broad
-
----
-
-### Issue 3: Agency-emit.sh writes to events.jsonl always
-
-**Priority:** LOW
-
-**Problem:** Even for non-agency personal sessions
-
-**Location:** `.claude/hooks/agency-emit.sh`
-
-**Solution:**
-- Add session tagging:
-  ```bash
-  # Set in environment or settings.json
-  CLAUDE_SESSION_TYPE=agency  # or "personal"
-  ```
-- Update agency-emit.sh to check `CLAUDE_SESSION_TYPE`
-- Only write to events.jsonl if `agency`
-- Document how to set session type
+**What was implemented:** Tested across scenarios (clean pass, failures, auto-fixes, pre-commit not installed), deployed to the blueprint repo, adoption script updated to use the new hook.
 
 ---
 
 ### Issue 4: No hook failure recovery
 
-**Priority:** MEDIUM
+**Priority:** MEDIUM (fixed ahead of schedule 2026-07-19 under the now-retired tier system)
+**Status:** ✅ COMPLETED (2026-07-19)
 
-**Problem:** If hook crashes, agent continues unaware
+**Problem:** If a hook crashed or exited non-zero, the agent proceeded unaware, with no durable cross-session record — only Claude Code's own ephemeral transcript notice.
 
-**Solution:**
-- Wrap all hooks in try-catch:
-  ```bash
-  if ! .claude/hooks/detect-ticket.sh 2>&1; then
-    echo "[hook-error] detect-ticket.sh failed" >&2
-  fi
-  ```
-- Log failures to `~/.claude-agency/hook-errors.log`
-- Send error to agent via system reminder
-- Add hook health check to doctor command
+**Research note:** confirmed Claude Code's actual hook exit-code semantics first — exit 1 (and any non-zero except 2) is already non-blocking (transcript notice, execution continues); only exit 2 blocks. This meant the fix had to be a **transparent wrapper**, not new error-handling inside each hook — anything that altered a hook's actual exit code would silently break Claude Code's own blocking behavior.
 
----
+**What was implemented:**
+- New `.claude/hooks/guard.sh <hook-name> <real-script> [args...]` — runs the wrapped hook, captures and replays stdout/stderr byte-for-byte, re-exits with the **exact original exit code**. On non-zero exit, appends a structured JSON line to `~/.claude-agency/hook-errors.log`.
+- Every registered hook in `.claude/settings.json` now routes through `guard.sh`.
+- `scripts/doctor.sh` — new "Hook errors" line + a recommendation if more than 10 have accumulated.
+- Did **not** add a second agent-facing error-surfacing mechanism — Claude Code already does this in-transcript; the gap closed here is specifically the durable, cross-session record.
 
-### Issue 5: Dynamic-context.sh purpose unclear
-
-**Priority:** LOW
-
-**Problem:** Exists but not documented
-
-**Location:** `.claude/hooks/dynamic-context.sh`
-
-**Solution:**
-- Document in `.claude/hooks/README.md`:
-  - What it does
-  - When it runs
-  - How to configure
-- Add inline comments to script
-- Add example usage to docs/
-
----
-
-### Additional Enhancements
-
-- **Configurable ticket detection:** Allow custom regex per team
-- **Hook marketplace:** Share useful hooks via gists
-- **Hook testing framework:** `./scripts/test-hook.sh <hook-name>`
-- **Hook performance monitoring:** Track execution time, log slow hooks
+**Tests:** `tests/hooks/guard.test.mjs` (8 tests, including the critical invariant that exit 2 is preserved exactly), `tests/hooks/settings-wiring.test.mjs` (3 tests confirming every registered hook actually routes through `guard.sh`). Manually verified against the real `detect-ticket.sh`, `run-pre-commit.sh`, and `agency-emit.sh` with a scratch `CLAUDE_AGENCY_HOME`, and re-ran the existing `run-pre-commit.sh` scenario/integration test scripts to confirm no behavior change — 4 pre-existing failures in `test-pre-commit-scenarios.sh` traced to a sandbox `PATH` quirk resolving `bash`/`grep`, unrelated to this change (confirmed via `git diff` showing zero modifications to that file).
 
 ---
 
@@ -1008,206 +472,296 @@ done
 ### Issue 1: 50+ markdown files hard to navigate
 
 **Priority:** MEDIUM
+**Status:** ✅ COMPLETED — PR #6 (Commits: 90ccf4b, 4bc103a, a1d03c3)
 
-**Problem:** Duplicated info across multiple docs
-
-**Solution:**
-- Consolidate related docs:
-  - MONOREPO-* → Single `MONOREPO.md`
-  - TOKEN-OPTIMIZATION + phases/ → Single `TOKEN-OPTIMIZATION.md`
-  - Setup guides → Single `SETUP.md` with sections
-- Create `docs/index.md` with clear navigation
-- Archive old docs to `docs/archive/`
+**What was implemented:** Consolidated MONOREPO-*/TOKEN-OPTIMIZATION/phases/ (11 files) into `docs/ADVANCED.md`; setup guides into `docs/SETUP.md`; changelog history into `docs/CHANGELOG.md`. 15 files archived to `docs/archive/` with deprecation notices, preserving git history. All cross-references updated.
 
 ---
 
 ### Issue 2: Multiple similar docs
 
 **Priority:** MEDIUM
+**Status:** ✅ COMPLETED — PR #6 (Commit: 890eac1)
 
-**Problem:** MONOREPO-SUMMARY vs MONOREPO-SUPPORT-SOLUTION vs MONOREPO-QUICK-START
-
-**Solution:**
-- Merge into single `docs/MONOREPO.md`:
-  - Quick Start (3 commands)
-  - How It Works (architecture)
-  - Troubleshooting (common issues)
-  - Design Decisions (from -SOLUTION doc)
-- Symlink old filenames to new location
-- Update all references in other docs
+**What was implemented:** MONOREPO-SUMMARY/MONOREPO-SUPPORT-SOLUTION/MONOREPO-QUICK-START merged into one "Monorepo Support" section in `docs/ADVANCED.md`.
 
 ---
 
 ### Issue 3: Setup guides fragmented
 
 **Priority:** MEDIUM
+**Status:** ✅ COMPLETED — PR #6 (Commits: e72853b, d6efb52)
 
-**Problem:** README vs SETUP.md vs LOCAL-ADOPTION.md
-
-**Solution:**
-- Structure as:
-  - README.md - Overview + quick start (3 paragraphs)
-  - SETUP.md - Detailed walkthrough (new users)
-  - ADVANCED.md - Advanced topics (orchestrator, profiles, monorepo)
-- Cross-reference clearly
-- Add "Next steps" at end of each doc
+**What was implemented:** Restructured into README.md (overview + quick start), SETUP.md (detailed new-user walkthrough, consolidating LOCAL-ADOPTION.md), ADVANCED.md (orchestrator/profiles/monorepo/token optimization).
 
 ---
 
 ### Issue 4: No changelog
 
 **Priority:** LOW
+**Status:** ✅ COMPLETED — PR #6 (Commit: 6ec10ff)
 
-**Problem:** Can't see what changed between versions
-
-**Solution:**
-- Create `CHANGELOG.md` following keepachangelog.com:
-  ```markdown
-  ## [Unreleased]
-  ### Added
-  - Smart CLAUDE.md merging
-  ### Fixed
-  - Pre-commit hook error handling
-  ```
-- Generate from git commits using conventional commits
-- Update on every release
-- Link from README
+**What was implemented:** `CHANGELOG.md` following keepachangelog.com format, 6 version entries, referenced from README's "Getting Help" section.
 
 ---
 
 ### Issue 5: No troubleshooting guide
 
 **Priority:** HIGH
-**Status:** ✅ COMPLETED - PR #6 (Commit: e4c4f3b)
+**Status:** ✅ COMPLETED — PR #6 (Commit: e4c4f3b)
 
-**Problem:** Common errors not documented with solutions
-
-**Solution:**
-- Create `docs/TROUBLESHOOTING.md`:
-  - Bootstrap fails: Node version, Python version, permissions
-  - Adoption fails: Git not initialized, BLUEPRINT_DIR not set
-  - Orchestrator won't start: Config missing, ports in use
-  - Dashboard blank: No events.jsonl, wrong path
-  - Agent stuck: Increase timeout, check logs
-- Add "Getting Help" section to README linking to this
-- Include CLI commands to diagnose each issue
+**What was implemented:** `docs/TROUBLESHOOTING.md` covering bootstrap/adoption/orchestrator/dashboard/agent failure modes with diagnostic CLI commands, linked from README's "Getting Help" section.
 
 ---
+
+# To-Do (15/45, all LOW priority)
+
+Every remaining issue is LOW priority — no CRITICAL, HIGH, or MEDIUM issues remain. Two items below were explicitly downgraded from MEDIUM to LOW on 2026-07-20 by user decision (marked below); everything else was always LOW.
+
+## Dashboard
+
+### Issue 2: No authentication
+
+**Priority:** LOW
+
+**Problem:** Binds 127.0.0.1 only, assumes a single operator on localhost. Mitigated today by the localhost-only bind; only matters if someone exposes the port, which would be a separate mistake.
+
+**Solution:**
+- Optional basic auth via env vars (`AGENCY_DASHBOARD_AUTH=user:pass`), middleware checking the Authorization header.
+- Document: "Leave unset for localhost-only, set for team use."
+- Consider OAuth2/SSO in a future version.
+
+---
+
+### Issue 6: No search/filter capability
+
+**Priority:** LOW
+
+**Problem:** Can't filter by ticket, agent type, or time range. Pure UX; matters more as `events.jsonl` grows.
+
+**Solution:**
+- Filter UI controls (agent role, status dropdowns; date range picker) applied in `buildState()`.
+- Search box filtering events by keyword in tool/file/prompt.
+- Save filter preferences in localStorage.
+
+---
+
+## Agent System
+
+### Issue 2: No agent version tracking
+
+**Priority:** LOW
+
+**Problem:** Can't tell which version of a custom agent is active.
+
+**Solution:**
+- Version metadata comments in agent files (`<!-- agent-version: 2.1.0 -->`).
+- `./scripts/agent-version.sh` to show current versions, list history, and roll back.
+- Track agent versions in the registry when a ticket completes.
+
+---
+
+### Issue 3: Agent profiles hardcoded in JSON
+
+**Priority:** LOW
+
+**Problem:** Can't customize which agents are available per profile without editing code.
+
+**Solution:**
+- Make `.claude/agents.profiles.json` more directly user-editable, with validation in `switch-agents.sh` that referenced agents exist.
+- `./scripts/customize-profile.sh frontend --add security-specialist`.
+- Document in `docs/AGENT-PROFILES.md`.
+
+---
+
+### Issue 5: Code-reviewer is superpowers symlink
+
+**Priority:** LOW
+
+**Problem:** If upstream superpowers updates break compatibility, the workflow breaks. Mitigation is a process/pinning decision, not a code change.
+
+**Solution:**
+- Pin the superpowers version in `bootstrap.sh`.
+- Test superpowers updates in staging before production.
+- Warn if the installed version exceeds the tested version.
+- Consider vendoring `code-reviewer.md` if stability becomes critical.
+
+---
+
+## Adoption & Bootstrap
+
+### Issue 4: Adopt script is complex
+
+**Priority:** LOW
+
+**Problem:** 482 lines originally, now 899 as of 2026-07-21 — growing, not shrinking, partly from this session's own additions (`--precommit-template`, `--diff`, `--no-graphify-hook`).
+
+**Solution:**
+- Refactor into smaller single-responsibility functions.
+- Extract validation logic into `lib/validate-adoption.sh`, symlink logic into `lib/create-symlinks.sh`.
+- Add `--verbose` step-by-step debug logging with timing.
+- Add unit tests per extracted function.
+
+---
+
+### Issue 5: No uninstall validation
+
+**Priority:** LOW
+
+**Problem:** Doesn't verify all blueprint artifacts were actually removed after `--uninstall`.
+
+**Solution:**
+- Post-uninstall checks (`.claude` gone, pre-commit hook unlinked, `.gitignore` cleaned of blueprint entries).
+- Summary: "✓ Removed X files, ✗ Y files remain."
+- `--force` to remove even user-modified files, with confirmation.
+
+---
+
+## Token Optimization
+
+### Issue 1: Savings projections unvalidated
+
+**Priority:** LOW *(downgraded from MEDIUM 2026-07-20 by explicit user decision)*
+
+**Problem:** The README's "70-90% reduction" claim is theoretical, never measured in practice. Public, checkable claim, but low urgency.
+
+**Solution:**
+- Add token tracking to measure actual before/after savings.
+- Run a benchmark suite on sample tasks.
+- Update docs with real measured numbers; track per-project savings in the registry.
+
+---
+
+### Issue 4: Template library (Phase 2) incomplete
+
+**Priority:** LOW
+
+**Problem:** Mentioned in docs but no templates exist.
+
+**Solution:**
+- Create `templates/code-patterns/` (API endpoint, React component, DB migration, Dockerfile templates).
+- `claude "create API endpoint" --use-template api-endpoint.py`.
+- Document template variables and usage.
+
+---
+
+### Issue 5: Module batching not implemented
+
+**Priority:** LOW
+
+**Problem:** Phase 2 feature incomplete.
+
+**Solution:**
+- Document the batching pattern in agent prompts (single `Read` call with multiple paths instead of separate calls for related files).
+- Add an example to agent definitions.
+- Measure savings once token tracking (Issue 1) exists.
+
+---
+
+### Issue 6: No token usage analytics
+
+**Priority:** LOW *(downgraded from MEDIUM 2026-07-20 by explicit user decision)*
+
+**Problem:** Can't measure which optimization strategies actually work. Would be the prerequisite for Issue 1 above if that's ever picked up.
+
+**Note:** `orchestrator/agent-stats.mjs` (built for the now-completed Agent System Issue 4) provides real per-agent *usage* stats — sessions, tool-call volume, duration — a partial step toward this, but doesn't track token counts specifically.
+
+**Solution:**
+- `./scripts/token-analytics.sh` — breakdown of tokens by category (files read, MCP calls, agent prompts, system instructions) and top savings opportunities.
+- Suggest optimizations based on the breakdown.
+
+---
+
+## Hooks & Integration
+
+### Issue 2: Ticket detection regex may miss formats
+
+**Priority:** LOW
+
+**Problem:** Only tested against ClickUp/Linear/GitHub/Jira URL patterns.
+
+**Location:** `.claude/hooks/detect-ticket.sh`
+
+**Solution:**
+- Make the regex configurable in `settings.json` (a `ticket_patterns` array), so teams can add patterns without code changes.
+- Log matched patterns for debugging; warn if a pattern is too broad.
+
+---
+
+### Issue 3: Agency-emit.sh writes to events.jsonl always
+
+**Priority:** LOW
+
+**Problem:** Writes even for non-agency personal sessions.
+
+**Location:** `.claude/hooks/agency-emit.sh`
+
+**Solution:**
+- Session tagging via `CLAUDE_SESSION_TYPE=agency|personal` (env var or settings.json).
+- Only write to `events.jsonl` when tagged `agency`.
+- Document how to set the session type.
+
+---
+
+### Issue 5: Dynamic-context.sh purpose unclear
+
+**Priority:** LOW
+
+**Problem:** The script exists but is undocumented. Per earlier investigation (Hooks Issue 4's writeup above), it isn't even wired into `settings.json` — it takes positional args that don't match how any registered hook is invoked, so it's currently dead code.
+
+**Location:** `.claude/hooks/dynamic-context.sh`
+
+**Solution:**
+- Document what it does, when it runs, and how to configure it in `.claude/hooks/README.md` — or, given it's dead code, consider removing it instead of documenting a no-op.
+- Add inline comments and an example in `docs/`.
+
+---
+
+## Documentation & Developer Experience
 
 ### Issue 6: ASCII diagrams brittle
 
 **Priority:** LOW
 
-**Problem:** Workflow diagrams in markdown break easily
+**Problem:** Workflow diagrams in markdown break easily and are hard to maintain.
 
 **Solution:**
-- Convert to Mermaid.js:
-  ```mermaid
-  graph TD
-    A[Poll tickets] --> B{Budget OK?}
-    B -->|Yes| C[Spawn agent]
-    B -->|No| D[Skip]
-  ```
-- Renders in GitHub, VS Code, docs sites
-- Much easier to maintain
-- Keep ASCII in code comments where Mermaid not supported
+- Convert to Mermaid.js diagrams (renders natively in GitHub, VS Code, docs sites).
+- Keep ASCII only where Mermaid isn't supported (e.g. code comments).
 
 ---
 
-### Additional Enhancements
+# Additional Enhancements (not tracked as numbered issues)
 
-- **Interactive docs server:** `./scripts/docs-server.sh` serves with search
-- **Video walkthroughs:** 5min screen recording for key workflows
-- **API reference:** Document orchestrator/dashboard REST endpoints
-- **Architecture Decision Records:** Document why key choices were made
+Ideas noted during the original analysis, kept for reference — none of these are scoped or prioritized; pick up only if there's a concrete need.
 
----
+**Orchestrator:** cost alerts at 80%/90% of cap; ticket prioritization by label; spawn queueing instead of skipping when budget is hit; graceful SIGTERM shutdown.
 
-## Prioritization Framework
+**Dashboard:** CSV event export; Chart.js metrics (tickets over time, cost trends); mobile-responsive layout; multi-user operator assignment tracking.
 
-### Critical (Fix Immediately)
+**Agent System:** agent marketplace (share custom agents via gists); conditional agent loading based on the implementation plan; framework-specific agent variants; `./scripts/new-agent.sh` scaffolding; agent composition (architect spawning a sub-agent).
 
-1. **CLAUDE.md merge** - Affects user trust
-2. **Pre-commit hook deployment** - Already fixed, needs validation
-3. **Leftover .claude-flow/** - Simple cleanup
-4. **Config backups gitignore** - Quick fix
+**Adoption:** interactive setup wizard; stack-specific templates (`--stack django-react`); timestamped adoption snapshots with restore; enhanced `doctor.sh` checks for orphaned symlinks/version mismatches.
 
-### High Priority (Next Sprint)
+**Token Optimization:** HTML context-usage visualization; adaptive `.claudeignore` learning; per-project optimization profiles; cost/benefit reporting per profile.
 
-1. **Real token tracking** - Foundation for accurate budgeting
-2. **Bootstrap verification** - Prevents broken setups
-3. **Orchestrator retry logic** - Prevents stuck tickets
-4. **Dashboard real-time** - Core UX improvement
+**Hooks:** per-team configurable ticket detection; hook marketplace; a `./scripts/test-hook.sh` testing framework; hook performance/slow-hook monitoring.
 
-### Medium Priority (Within 2 Sprints)
-
-1. **ClickUp/Linear/Jira sources** - Expands ticket system support
-2. **Agent profile improvements** - Non-destructive switching
-3. **Documentation consolidation** - Reduces confusion
-4. **Integration tests** - Quality assurance
-
-### Low Priority (Nice to Have)
-
-1. **Template library** - Phase 2 optimization
-2. **Agent marketplace** - Community features
-3. **Metrics dashboard** - Analytics enhancements
-4. **Video walkthroughs** - Improved onboarding
-
----
-
-## Implementation Roadmap
-
-### Phase 1: Critical Fixes (Week 1)
-- Smart CLAUDE.md merge in adopt.sh
-- Deploy pre-commit hook fix
-- Clean up .claude-flow/ and update .gitignore
-- Add config backups to .gitignore
-
-### Phase 2: Core Infrastructure (Weeks 2-3)
-- Real token tracking in orchestrator
-- Bootstrap verification mode
-- Orchestrator retry logic
-- Dashboard WebSocket real-time updates
-
-### Phase 3: Enhanced Experience (Weeks 4-6)
-- ClickUp/Linear/Jira ticket sources
-- Non-destructive agent profile switching
-- Integration test suite
-- Documentation consolidation
-
-### Phase 4: Optimization & Polish (Weeks 7-8)
-- Token usage analytics
-- Agent performance metrics
-- Troubleshooting guide
-- Video walkthroughs
+**Documentation:** interactive docs server with search; video walkthroughs; REST API reference for orchestrator/dashboard; Architecture Decision Records.
 
 ---
 
 ## Success Metrics
 
-- **Adoption rate:** % of users who successfully adopt without issues
-- **Token tracking accuracy:** <5% variance from actual costs
-- **Orchestrator uptime:** >99% (no stuck spawns)
-- **Dashboard performance:** <500ms state updates even at 50MB events.jsonl
-- **Documentation clarity:** <2 support requests per issue after consolidation
-- **Test coverage:** >80% for critical paths (bootstrap, adoption, orchestrator)
+- **Adoption rate:** % of users who successfully adopt without issues.
+- **Token tracking accuracy:** <5% variance from actual costs.
+- **Orchestrator uptime:** >99% (no stuck spawns).
+- **Dashboard performance:** <500ms state updates even at 50MB events.jsonl.
+- **Documentation clarity:** <2 support requests per issue after consolidation.
+- **Test coverage:** >80% for critical paths (bootstrap, adoption, orchestrator).
 
 ---
 
-## Conclusion
-
-This analysis identifies **42 distinct issues** across 8 component areas, each paired with actionable solutions. The prioritization framework ensures critical user-facing issues (CLAUDE.md merge, config clarity) are addressed first, followed by infrastructure improvements (token tracking, real-time dashboard), and finally optimization features.
-
-The implementation roadmap spans 8 weeks and can be parallelized across multiple contributors by component ownership.
-
-**Next Steps:**
-1. User reviews this design document
-2. Create implementation plan using writing-plans skill
-3. Break down into individual tickets
-4. Begin Phase 1 critical fixes
-
----
-
-**Document Status:** Draft - Awaiting user review
-**Author:** Claude (Sonnet 4.5)
-**Review Required:** Yes
+**Document Status:** In Progress — 30/45 issues completed (67%), 15/45 remaining (33%, all LOW priority), as of 2026-07-22.
+**Author:** Claude (Sonnet 4.5 / Sonnet 5, across sessions)
+**Last Review:** 2026-07-22

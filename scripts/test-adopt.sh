@@ -85,7 +85,13 @@ cp -R "$BLUEPRINT"/. "$blueprint_copy/"
 (cd "$tmp" && BLUEPRINT_DIR="$blueprint_copy" "$blueprint_copy/scripts/adopt.sh" --framework python) >/dev/null
 rm -rf "$blueprint_copy"
 rc=0
-(cd "$tmp" && BLUEPRINT_DIR="$BLUEPRINT" "$BLUEPRINT/scripts/adopt.sh" --doctor --quiet) 2>/dev/null || rc=$?
+# NOTE on the --framework flag below: it's a harmless no-op now that adopt.sh
+# skips framework validation entirely for non-adopt actions (fixed 2026-07-20 —
+# previously --doctor alone would die with "No frameworks specified" before its
+# own dead-symlink logic ever ran, which made this assertion pass for the wrong
+# reason). Left in place for clarity/parity with the adopt call above; a bare
+# `--doctor --quiet` now works correctly too — see tests/adopt/known-bugs.test.mjs.
+(cd "$tmp" && BLUEPRINT_DIR="$BLUEPRINT" "$BLUEPRINT/scripts/adopt.sh" --framework python --doctor --quiet) 2>/dev/null || rc=$?
 assert "[doctor] non-zero on dead symlinks" "[[ $rc -ne 0 ]]"
 rm -rf "$tmp"
 

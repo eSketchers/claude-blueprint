@@ -4,11 +4,12 @@
 // serves /api/state.json and static assets on :7842.
 
 import { createServer } from 'node:http';
-import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, watch, writeFileSync, appendFileSync, readdirSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, watch, writeFileSync, appendFileSync, readdirSync, renameSync } from 'node:fs';
 import { join, dirname, resolve, extname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { buildDigest, formatMarkdown } from '../orchestrator/digest.mjs';
+import { buildAgentStats, readAllEvents } from '../orchestrator/agent-stats.mjs';
 import { WebSocketServer } from 'ws';
 import { EventReader } from './event-reader.mjs';
 
@@ -18,6 +19,7 @@ const HOME = process.env.CLAUDE_AGENCY_HOME || join(homedir(), '.claude-agency')
 const EVENTS = join(HOME, 'events.jsonl');
 const INBOX = join(HOME, 'inbox');
 const OUTBOX = join(HOME, 'outbox');
+const AGENT_LOGS = join(HOME, 'agent-logs');
 const STATIC_DIR = join(__dirname, 'public');
 
 // Agent role → emoji avatar + zone
@@ -193,6 +195,37 @@ async function readBody(req, limit = 64 * 1024) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+/**
+ * Write `content` to `finalPath` atomically: write to a uniquely-named temp
+ * file in the same directory, then rename into place. `rename()` is atomic
+ * on POSIX filesystems (same directory = same filesystem), so a concurrent
+ * reader of `finalPath` always sees either the old content or the fully new
+ * content — never a torn/partial write. Contrast with the previous
+ * `writeFileSync(finalPath, ...)`, which could be observed mid-write by
+ * `.claude/hooks/inbox-check.sh`'s `cat`.
+ */
+function writeFileAtomic(finalPath, content) {
+  const tmp = `${finalPath}.tmp-${process.pid}-${Math.random().toString(36).slice(2)}`;
+  writeFileSync(tmp, content);
+  renameSync(tmp, finalPath);
+}
+
+/**
+ * Last N lines of a ticket's agent log (orchestrator/spawn.mjs writes one
+ * file per ticket at agent-logs/<sanitized-ticket-id>.log). Addresses
+ * Dashboard Issue 5 ("No agent output preview") — lets an operator see what
+ * an agent is actually doing without shelling into log files by hand.
+ */
+function tailAgentLog(ticketId, maxLines = 100) {
+  const safe = ticketId.replace(/[^a-zA-Z0-9._-]/g, '_'); // must match spawn.mjs's sanitization exactly
+  const logFile = join(AGENT_LOGS, `${safe}.log`);
+  if (!existsSync(logFile)) return { found: false, lines: [] };
+  const content = readFileSync(logFile, 'utf8');
+  const allLines = content.split('\n');
+  const lines = allLines.slice(-maxLines);
+  return { found: true, lines, total_lines: allLines.length };
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
@@ -210,7 +243,7 @@ const server = createServer(async (req, res) => {
       }
       const safe = session_id.replace(/[^a-zA-Z0-9_.-]/g, '_');
       const slot = join(INBOX, `${safe}.txt`);
-      writeFileSync(slot, message);
+      writeFileAtomic(slot, message);
       // Also log the user's unblock as an event so it shows in the timeline
       appendFileSync(EVENTS, JSON.stringify({
         ts: Date.now(),
@@ -239,6 +272,23 @@ const server = createServer(async (req, res) => {
     const digest  = buildDigest({ home: HOME, date, config });
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     return res.end(JSON.stringify({ ...digest, markdown: formatMarkdown(digest) }));
+  }
+
+  if (url.pathname.startsWith('/api/agent-log/')) {
+    const ticketId = decodeURIComponent(url.pathname.slice('/api/agent-log/'.length));
+    if (!ticketId) { res.writeHead(400); return res.end('ticket id required'); }
+    const maxLines = Math.min(Number(url.searchParams.get('lines')) || 100, 1000);
+    const result = tailAgentLog(ticketId, maxLines);
+    res.writeHead(result.found ? 200 : 404, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    return res.end(JSON.stringify(result));
+  }
+
+  if (url.pathname === '/api/agent-stats') {
+    const since = url.searchParams.get('since') || '7d';
+    const events = readAllEvents(EVENTS);
+    const stats = buildAgentStats({ events, since });
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    return res.end(JSON.stringify(stats));
   }
 
   if (url.pathname === '/api/health') {

@@ -127,6 +127,13 @@ tr:last-child td { border-bottom: none; }
   padding: 0.6rem; font: inherit; resize: vertical;
 }
 .modal .actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.75rem; }
+.modal.modal-wide { width: min(820px, 92vw); }
+.log-viewer {
+  background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 0.75rem; max-height: 60vh; overflow-y: auto; overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem; line-height: 1.4; white-space: pre-wrap; word-break: break-word;
+}
 button {
   background: var(--accent); color: #0a0d14; border: 0; padding: 0.45rem 0.9rem;
   border-radius: 6px; cursor: pointer; font-weight: 600; font: inherit;

@@ -22,11 +22,12 @@ Optional flag `--auto` skips the human approval gate after the improved plan.
    - Otherwise: ask the user which source to use before proceeding.
 2. Fetch ticket: title, description, acceptance criteria, labels, attachments, linked items.
 3. Classify: **feature** | **bug** | **chore** | **spike**. Report your classification and one-sentence justification.
-4. **Check MCP profile compatibility:**
-   - Run `jq -r '.mcpServers | keys[]' .claude/settings.json` to see active MCPs
-   - If minimal profile (only 3 MCPs) + feature ticket → Warn: "Recommend 'frontend', 'backend', or 'ticket' profile for features"
-   - If frontend profile + backend-heavy labels/description → Suggest: "Consider 'ticket' profile"
-   - If profile seems adequate → Proceed silently
+4. **Detect the required profile** (this is the *only* profile check in the workflow — do not re-check in Phase 1):
+   - Run `.claude/hooks/detect-profile.sh "<ticket title + description>" "<current profile>"`, where `<current profile>` is inferred from active MCPs (`jq -r '.mcpServers | keys[]' .claude/settings.json`) — match the MCP set against `.claude/agents.profiles.json`'s known profiles, or pass it empty if you can't tell.
+   - stdout is the recommended profile name alone (e.g. `backend`); stderr has the rationale and matched keywords — read both.
+   - The script already logs the recommendation to `~/.claude-agency/events.jsonl`, so no separate logging step is needed.
+   - **If the recommendation matches the current profile:** proceed silently.
+   - **If it differs:** tell the user the recommended profile and why (from stderr's rationale), and ask: "Switch profiles with `./scripts/switch-profile-full.sh <profile>` and restart, or continue anyway with the current profile? [switch/continue]" — do **not** force a hard stop; let the user decide, since the detection is a heuristic (keyword matching), not a guarantee.
 5. If **not a feature**, stop here and ask the user whether to continue with a simpler flow (bug / chore don't need adversarial review).
 
 ## Phase 1 — Plan
@@ -40,16 +41,9 @@ Optional flag `--auto` skips the human approval gate after the improved plan.
 - Read existing ADRs and architecture docs
 - **Aim for 10-15 file reads max** - understanding patterns > reading everything
 
-Invoke the `architect` subagent with the fetched ticket.
+Invoke the `architect` subagent with the fetched ticket. (Profile detection already happened in Phase 0 step 4 — don't re-check it here.)
 
-**The architect will first perform profile detection:**
-- Analyze ticket requirements (backend/frontend/infra/data/e2e)
-- Check current active MCPs with `jq -r '.mcpServers | keys[]' .claude/settings.json`
-- Determine required profile (minimal/frontend/backend/fullstack/devops/data/ticket)
-- If current profile is insufficient, architect will STOP and output profile upgrade instructions
-- User must exit, upgrade profile, and restart workflow
-
-**If profile is sufficient**, architect produces `docs/plans/<ticket-slug>.md` following the superpowers `writing-plans` skill format:
+The architect produces `docs/plans/<ticket-slug>.md` following the superpowers `writing-plans` skill format:
 
 - Problem statement (one paragraph)
 - Acceptance criteria (bulleted, testable)

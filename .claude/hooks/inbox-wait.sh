@@ -36,10 +36,18 @@ echo "[inbox-wait] (dashboard: http://127.0.0.1:7842  ·  inbox file: $INBOX)"
 END=$((SECONDS + TIMEOUT))
 while (( SECONDS < END )); do
   if [[ -s "$INBOX" ]]; then
-    body="$(cat "$INBOX")"
-    mv "$INBOX" "$OUTBOX_DIR/${SESSION}-$(date +%s).txt"
-    printf '\n===== operator reply =====\n%s\n===== end reply =====\n' "$body"
-    exit 0
+    # Claim (atomic rename) BEFORE reading — see inbox-check.sh for why: a
+    # reply arriving between a read and an archive would otherwise be lost.
+    # PID + nanoseconds (falls back to seconds) avoids archive-filename
+    # collisions across back-to-back claims within the same second.
+    stamp="$(date +%s%N 2>/dev/null || date +%s)"
+    archive="$OUTBOX_DIR/${SESSION}-${stamp}-$$.txt"
+    if mv "$INBOX" "$archive" 2>/dev/null; then
+      body="$(cat "$archive")"
+      printf '\n===== operator reply =====\n%s\n===== end reply =====\n' "$body"
+      exit 0
+    fi
+    # mv failed (e.g. file vanished between the -s check and the mv) — keep polling.
   fi
   sleep 2
 done

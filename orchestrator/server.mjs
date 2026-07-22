@@ -19,9 +19,14 @@ import { Notifier }        from './notifier.mjs';
 import { spawnTicketAgent } from './spawn.mjs';
 import { fetchGithub }     from './sources/github.mjs';
 import { fetchFilesystem, archiveFilesystemTicket } from './sources/filesystem.mjs';
+import { fetchBeads, claimBeadsTicket, closeBeadsTicket } from './sources/beads.mjs';
+import { fetchClickUp }    from './sources/clickup.mjs';
+import { fetchLinear }     from './sources/linear.mjs';
+import { fetchJira }       from './sources/jira.mjs';
 import { detectStuck }     from './stuck-detector.mjs';
 import { buildDigest, formatMarkdown } from './digest.mjs';
 import { RetryManager }    from './retry-manager.mjs';
+import { Killer }          from './killer.mjs';
 
 const CONFIG_PATH = process.env.AGENCY_ORCH_CONFIG || resolve('config/orchestrator.json');
 const HOME        = process.env.CLAUDE_AGENCY_HOME || join(homedir(), '.claude-agency');
@@ -45,6 +50,12 @@ const notifier = new Notifier(config.notifier || {});
 const stuckCfg = config.stuck || {};
 const retryManager = new RetryManager(config.retry || {});
 const retryQueue = new Map(); // ticketId -> timeoutId
+
+const killer = new Killer({
+  registry,
+  notifier,
+  graceMs: Number(config.budget?.kill_grace_ms ?? 30_000),
+});
 
 // In-memory sliding window of recent events per ticket + last stuck notification time.
 // Lost on restart — idle-rule still works off persisted last_event_at.
@@ -106,6 +117,10 @@ async function intakeTick() {
     try {
       if (src.type === 'github')     tickets = await fetchGithub(src);
       else if (src.type === 'filesystem') tickets = await fetchFilesystem(src);
+      else if (src.type === 'beads')      tickets = await fetchBeads(src);
+      else if (src.type === 'clickup')    tickets = await fetchClickUp(src);
+      else if (src.type === 'linear')     tickets = await fetchLinear(src);
+      else if (src.type === 'jira')       tickets = await fetchJira(src);
       else {
         console.warn(`[intake] unknown source type: ${src.type}`);
         continue;
@@ -128,6 +143,15 @@ async function intakeTick() {
         repo_path:   t.repo_path,
         labels:      t.labels,
       };
+      // Carry beads' own issue id + db location through the registry so the
+      // 'done' transition in onEvent() can call closeBeadsTicket() later —
+      // registry.get() only ever returns what was persisted here, so these
+      // fields must be saved now even though they're only used at close time.
+      if (t.source === 'beads') {
+        reg._bd_id = t._bd_id;
+        reg._repo_path = t._repo_path;
+        reg._beads_dir = t._beads_dir;
+      }
       registry.claim(t.id, reg);
 
       console.log(`[intake] claimed ${t.id} — "${t.title}"`);
@@ -147,6 +171,10 @@ async function intakeTick() {
           spawned_at:  Date.now(),
           log_file:    result.logFile,
           command:     result.command,
+          // spawn.mjs sets CLAUDE_SESSION_ID to this same ticket id before
+          // spawning, so this is the value agency-emit.sh will report as
+          // ev.session_id for every hook event from this session.
+          spawned_session_id: t.id,
         });
 
         // Monitor for early exit (crash detection)
@@ -177,6 +205,11 @@ async function intakeTick() {
       if (t.source === 'filesystem') {
         try { await archiveFilesystemTicket(t); } catch {/* non-fatal */}
       }
+
+      // Reflect the claim in beads' own graph so `bd ready` won't resurface it.
+      if (t.source === 'beads') {
+        try { await claimBeadsTicket(t); } catch (e) { console.error(`[intake] bd claim failed for ${t.id}:`, e.message); }
+      }
     }
   }
 }
@@ -187,9 +220,8 @@ const EVENTS = join(HOME, 'events.jsonl');
 let lastOffset = existsSync(EVENTS) ? statSync(EVENTS).size : 0;
 
 function sessionToTicketId(sessionId) {
-  // Match a session to a ticket by cross-referencing the registry.
-  // We store spawned_session_id when available; for now match by ticket prefix or by any in_progress.
-  // First, try exact session mapping:
+  // Exact match against spawned_session_id, which spawn.mjs sets to the
+  // ticket's own id via CLAUDE_SESSION_ID before launching the agent.
   for (const t of registry.list()) {
     if (t.spawned_session_id === sessionId) return t.id;
   }
@@ -203,9 +235,22 @@ function appendToWindow(ticketId, ev) {
   if (arr.length > EVENT_WINDOW_SIZE) arr.splice(0, arr.length - EVENT_WINDOW_SIZE);
 }
 
+const loggedCorrelationFallback = new Set();
+
 function onEvent(ev) {
-  const ticketId = sessionToTicketId(ev.session_id) || (ev.ticket ? ev.ticket : null);
+  const bySession = sessionToTicketId(ev.session_id);
+  const ticketId = bySession || (ev.ticket ? ev.ticket : null);
   if (!ticketId) return;
+
+  // Log once per ticket (not per event) when correlation had to fall back to
+  // the branch-slug-derived ev.ticket field instead of an exact session_id
+  // match — this is the "log correlation method used for debugging" ask:
+  // it surfaces tickets where spawned_session_id was never set (e.g. a
+  // process not spawned by this orchestrator, or spawned before this fix).
+  if (!bySession && !loggedCorrelationFallback.has(ticketId)) {
+    loggedCorrelationFallback.add(ticketId);
+    console.log(`[correlate] ${ticketId}: no session_id match (session_id=${ev.session_id || '(none)'}), falling back to branch-derived ticket field`);
+  }
 
   appendToWindow(ticketId, ev);
 
@@ -250,6 +295,7 @@ function onEvent(ev) {
         ticket_id: ticketId,
       });
     }
+    if (prev?.spawned_pid) killer.kill(ticketId, prev.spawned_pid, halt.reason);
   }
 
   // Blocker notification (explicit, via /wait-for-reply)
@@ -276,6 +322,10 @@ function onEvent(ev) {
         ticket_id: ticketId,
         link: prev.url,
       });
+      if (prev.source === 'beads') {
+        closeBeadsTicket(prev, 'completed by agent').catch(e =>
+          console.error(`[event] bd close failed for ${ticketId}:`, e.message));
+      }
     } else {
       // Let stuckTick pick it up with the 'stopped_no_changes' rule.
       registry.update(ticketId, { pending_stop: true });
@@ -390,6 +440,7 @@ async function tick() {
     await intakeTick();
     tailEvents();
     stuckTick();
+    killer.sweep(budget);
     await digestTick();
     const warn = budget.checkThresholds();
     if (warn?.warn) await notifier.notify('budget_cap', { title: warn.reason });

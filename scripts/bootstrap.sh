@@ -93,8 +93,14 @@ install_tool() {
   fi
 }
 
-command -v claude >/dev/null 2>&1 || die "claude CLI not found. Install Claude Code first."
-command -v npx   >/dev/null 2>&1 || die "npx not found. Install Node 20+ first."
+# --dry-run is meant to preview what would be installed without requiring
+# anything to already be present — a fresh machine running --dry-run before
+# installing Claude Code / Node is exactly the intended use case. Only
+# enforce these prerequisites for a real (non-dry-run) install.
+if [[ "$DRY_RUN" == "false" ]]; then
+  command -v claude >/dev/null 2>&1 || die "claude CLI not found. Install Claude Code first."
+  command -v npx   >/dev/null 2>&1 || die "npx not found. Install Node 20+ first."
+fi
 
 # ------------------------------------------------------------------
 # 1. Claude Code plugins

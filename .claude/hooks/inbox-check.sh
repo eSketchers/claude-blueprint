@@ -18,6 +18,18 @@ if [[ ! -s "$INBOX" ]]; then
   exit 0
 fi
 
-# Print then archive
-cat "$INBOX"
-mv "$INBOX" "$OUTBOX_DIR/${SESSION}-$(date +%s).txt"
+# Claim (atomic rename) BEFORE reading. If we read first and archive after,
+# a reply that lands from the dashboard between the read and the archive is
+# silently lost (archived without ever being seen). Claiming first means any
+# such late write instead creates a fresh $INBOX file that a later
+# inbox-check/inbox-wait run will pick up.
+#
+# Archive name includes PID + nanoseconds (falls back to seconds if the date
+# binary doesn't support %N, e.g. macOS /bin/date): two claims for the same
+# session within the same wall-clock second must not collide and silently
+# overwrite each other's archived reply — `date +%s` alone isn't unique enough
+# once claim-then-read makes back-to-back consumption a normal pattern.
+STAMP="$(date +%s%N 2>/dev/null || date +%s)"
+ARCHIVE="$OUTBOX_DIR/${SESSION}-${STAMP}-$$.txt"
+mv "$INBOX" "$ARCHIVE"
+cat "$ARCHIVE"

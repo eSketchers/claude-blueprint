@@ -171,6 +171,10 @@ async function intakeTick() {
           spawned_at:  Date.now(),
           log_file:    result.logFile,
           command:     result.command,
+          // spawn.mjs sets CLAUDE_SESSION_ID to this same ticket id before
+          // spawning, so this is the value agency-emit.sh will report as
+          // ev.session_id for every hook event from this session.
+          spawned_session_id: t.id,
         });
 
         // Monitor for early exit (crash detection)
@@ -216,9 +220,8 @@ const EVENTS = join(HOME, 'events.jsonl');
 let lastOffset = existsSync(EVENTS) ? statSync(EVENTS).size : 0;
 
 function sessionToTicketId(sessionId) {
-  // Match a session to a ticket by cross-referencing the registry.
-  // We store spawned_session_id when available; for now match by ticket prefix or by any in_progress.
-  // First, try exact session mapping:
+  // Exact match against spawned_session_id, which spawn.mjs sets to the
+  // ticket's own id via CLAUDE_SESSION_ID before launching the agent.
   for (const t of registry.list()) {
     if (t.spawned_session_id === sessionId) return t.id;
   }
@@ -232,9 +235,22 @@ function appendToWindow(ticketId, ev) {
   if (arr.length > EVENT_WINDOW_SIZE) arr.splice(0, arr.length - EVENT_WINDOW_SIZE);
 }
 
+const loggedCorrelationFallback = new Set();
+
 function onEvent(ev) {
-  const ticketId = sessionToTicketId(ev.session_id) || (ev.ticket ? ev.ticket : null);
+  const bySession = sessionToTicketId(ev.session_id);
+  const ticketId = bySession || (ev.ticket ? ev.ticket : null);
   if (!ticketId) return;
+
+  // Log once per ticket (not per event) when correlation had to fall back to
+  // the branch-slug-derived ev.ticket field instead of an exact session_id
+  // match — this is the "log correlation method used for debugging" ask:
+  // it surfaces tickets where spawned_session_id was never set (e.g. a
+  // process not spawned by this orchestrator, or spawned before this fix).
+  if (!bySession && !loggedCorrelationFallback.has(ticketId)) {
+    loggedCorrelationFallback.add(ticketId);
+    console.log(`[correlate] ${ticketId}: no session_id match (session_id=${ev.session_id || '(none)'}), falling back to branch-derived ticket field`);
+  }
 
   appendToWindow(ticketId, ev);
 

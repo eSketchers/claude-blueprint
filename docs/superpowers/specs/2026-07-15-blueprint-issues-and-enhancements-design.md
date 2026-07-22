@@ -14,9 +14,9 @@ This document previously carried the same information in five or six overlapping
 **Note on prioritization scheme (2026-07-20, retained for history):** this document previously used a risk-ranked "Tier 0–6" system layered on top of the original CRITICAL/HIGH/MEDIUM/LOW labels. That system was retired by explicit user decision on 2026-07-20 — it served its purpose while safety- and confidence-critical fixes were the priority, but the remaining work didn't map cleanly onto it anymore. Priority is the flat CRITICAL/HIGH/MEDIUM/LOW scheme throughout this document. Three items were explicitly downgraded from MEDIUM to LOW as part of that change (Orchestrator Issue 4, Token Optimization Issue 1, Token Optimization Issue 6); Orchestrator Issue 4 has since been completed (see below).
 
 **Status count (verified by re-scanning every issue's own status line, not by incrementing a summary counter):**
-- **29/45 complete** — 27 fully done + 2 deliberately partial-scope completions (Orchestrator Issue 6, Adoption Issue 2 — both closed by explicit decision to ship a narrower fix rather than the original full spec; see their entries below)
-- **16/45 remaining** — all LOW priority
-- Full test suite: `node --test tests/` → **194/194 passing**
+- **30/45 complete** — 28 fully done + 2 deliberately partial-scope completions (Orchestrator Issue 6, Adoption Issue 2 — both closed by explicit decision to ship a narrower fix rather than the original full spec; see their entries below)
+- **15/45 remaining** — all LOW priority
+- Full test suite: `node --test tests/` → **198/198 passing**
 
 ---
 
@@ -37,7 +37,7 @@ This document analyzes the claude-agency-blueprint system component-by-component
 
 ---
 
-# Completed (29/45)
+# Completed (30/45)
 
 ## Cross-Cutting Issues
 
@@ -170,6 +170,27 @@ This document analyzes the claude-agency-blueprint system component-by-component
 **Tests:** `clickup-source.test.mjs` (13), `linear-source.test.mjs` (10), `jira-source.test.mjs` (12) — 35 total, mocking `global.fetch` with response shapes copied from real API calls/introspection. Covers shape mapping, pagination, limit-truncation short-circuiting, filter construction, and error paths.
 
 **Unplanned addition, same pickup:** `sources/beads.mjs` — integrates [beads](https://github.com/gastownhall/beads), a dependency-graph task tracker, as an orchestrator source. Not one of the original 45 tracked issues; added because the user asked about using beads as a task-management backend. Unlike ClickUp/Linear/Jira, includes claim/close write-back (`bd update <id> --claim`, `bd close <id> --reason`) so beads' own graph stays in sync — a ticket only shows as "ready" once its dependencies are closed. Verified end-to-end against a real local `bd` install: created two dependent tasks, confirmed only the unblocked one showed as ready, claimed and closed it, confirmed the dependent then became ready. `beads-source.test.mjs` (13 tests, mocked `bd` binary). Also surfaced two real bugs while documenting this for end users: `bd init` (without `--stealth`) auto-commits its own files to the target repo unreviewed — the blueprint's own README now documents `bd init --quiet --stealth` instead; and `bd dep add <blocked-id> <blocker-id>`'s argument order is the reverse of the intuitive reading, confirmed via live testing before documenting it.
+
+---
+
+### Issue 5: Session→ticket correlation approximate
+
+**Priority:** LOW
+**Status:** ✅ COMPLETED (2026-07-22)
+
+**Problem:** Relied on a git-branch slug to match a live event back to its ticket if `CLAUDE_SESSION_ID` wasn't set early enough — `sessionToTicketId()` in `server.mjs` looked up `registry.spawned_session_id`, but nothing anywhere in the codebase ever wrote that field, so the exact-match path could never succeed and every ticket fell through to branch-slug matching.
+
+**Note (confirmed earlier, still true):** adopting `beads` as a ticket source does **not** resolve this — beads has no concept of a live Claude Code session/process; this was purely a `spawn.mjs`/event-tailer correlation gap, orthogonal to which ticket source feeds the orchestrator.
+
+**What was implemented** (exactly the 3-item solution originally scoped, verified end-to-end against real hook scripts rather than assumed correct):
+- `orchestrator/spawn.mjs` now sets `env.CLAUDE_SESSION_ID = ticket.ticket_id` before spawning — Claude Code's hooks read this env var as the session id, so `.claude/hooks/agency-emit.sh` writes it straight into every event's `session_id` field. Set last in the env merge, so it deliberately overrides any `spec.env.CLAUDE_SESSION_ID` a team might configure — predictable correlation always wins.
+- `orchestrator/server.mjs` now writes `spawned_session_id: t.id` into the registry at the same point a ticket is claimed/spawned — the missing write half of `sessionToTicketId()`'s existing read logic.
+- `onEvent()` now logs (once per ticket, not per event) when correlation had to fall back to the branch-derived `ev.ticket` field instead of an exact `session_id` match — surfaces any ticket whose session wasn't spawned through this orchestrator, or spawned before this fix.
+- Also cleaned up a stale comment on `sessionToTicketId()` that described an older, no-longer-accurate fallback strategy ("match by ticket prefix or by any in_progress") that the function had already stopped doing.
+
+**Verified live, not just by code inspection:** spawned a real child process and confirmed `process.env.CLAUDE_SESSION_ID` inside it equals the ticket id exactly; ran the real `.claude/hooks/agency-emit.sh` under that env and confirmed the event it wrote to `events.jsonl` carries `"session_id":"<ticket_id>"` verbatim — the full chain (spawn → env var → real hook → event log) works end-to-end, not just in isolation.
+
+**Tests:** `tests/orchestrator/spawn.test.mjs` (4 tests) — `CLAUDE_SESSION_ID` set to the ticket id for a real spawned process, an explicit `spec.env.CLAUDE_SESSION_ID` is still overridden by the ticket id, `--dry-run` never actually spawns anything, and the rest of `process.env`/custom env vars still pass through unaffected. `server.mjs`'s own `sessionToTicketId()`/registry-wiring change was verified by direct code inspection rather than a new test (it isn't exported, matching how this file's other internal logic — `intakeTick()`, `onEvent()` — has been handled all session, since forcing an export solely for testability would be a bigger change than this fix warrants).
 
 ---
 
@@ -493,26 +514,9 @@ This document analyzes the claude-agency-blueprint system component-by-component
 
 ---
 
-# To-Do (16/45, all LOW priority)
+# To-Do (15/45, all LOW priority)
 
 Every remaining issue is LOW priority — no CRITICAL, HIGH, or MEDIUM issues remain. Two items below were explicitly downgraded from MEDIUM to LOW on 2026-07-20 by user decision (marked below); everything else was always LOW.
-
-## Orchestrator
-
-### Issue 5: Session→ticket correlation approximate
-
-**Priority:** LOW
-
-**Problem:** Relies on branch slug if `CLAUDE_SESSION_ID` isn't set early enough. Narrow blast radius — only matters when spawn doesn't set the session ID before the hook fires.
-
-**Solution:**
-- Modify `spawn.mjs` to set `CLAUDE_SESSION_ID` before spawn, using ticket_id as the session ID for predictable correlation.
-- Update the event tailer to match on session_id first, branch as fallback.
-- Log which correlation method was used, for debugging.
-
-**Note:** adopting `beads` as a ticket source does **not** resolve this — beads has no concept of a live Claude Code session/process; this is purely a `spawn.mjs`/event-tailer correlation problem, orthogonal to which ticket source feeds the orchestrator.
-
----
 
 ## Dashboard
 
@@ -758,6 +762,6 @@ Ideas noted during the original analysis, kept for reference — none of these a
 
 ---
 
-**Document Status:** In Progress — 29/45 issues completed (64%), 16/45 remaining (36%, all LOW priority), as of 2026-07-22.
+**Document Status:** In Progress — 30/45 issues completed (67%), 15/45 remaining (33%, all LOW priority), as of 2026-07-22.
 **Author:** Claude (Sonnet 4.5 / Sonnet 5, across sessions)
 **Last Review:** 2026-07-22

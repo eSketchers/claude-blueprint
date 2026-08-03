@@ -39,181 +39,6 @@ cd ~/work/my-project
 ./scripts/graphify-index.sh
 ```
 
-## Getting Help
-
-Having issues? Check our comprehensive [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for solutions to common problems:
-
-- Bootstrap failures (Node/Python/CLI issues)
-- Adoption problems (Git, framework detection)
-- Orchestrator issues (config, budget, stuck tickets)
-- Dashboard problems (blank page, performance)
-- Agent crashes and profile errors
-
-For additional support:
-- Run diagnostics: `./scripts/doctor.sh`
-- Check [Setup Guide](docs/SETUP.md) or [Advanced Guide](docs/ADVANCED.md)
-- Review [recent changes](docs/CHANGELOG.md)
-- Report issues: [GitHub Issues](https://github.com/your-org/claude-agency-blueprint/issues)
-
-## Token Optimization
-
-The blueprint includes built-in optimizations targeting 70-90% reduction in wasted context:
-
-**Phase 1 (Core):**
-- **`.claudeignore`** — Filters noise files (dependencies, build outputs)
-- **Smart file reading** — Agents follow purposeful reading patterns
-- **Haiku for exploration** — Cheaper model for discovery tasks
-- **Graphify indexing** — Query graph instead of reading files repeatedly
-
-**Phase 2 (Templates & Tools):**
-- **Template library** — Reusable code patterns (2K-5K tokens per new file)
-- **AST navigation** — Structural search without reading full files
-- **Module batching** — Read related files together efficiently
-
-**Phase 3 (Dynamic Context):**
-- **Profile-based MCP loading** — Activate only needed MCPs per task (30-60% savings)
-- **Conditional agent dispatch** — Load agents only when plan requires them (built-in)
-
-```bash
-# Switch to minimal profile for exploration
-./scripts/switch-profile.sh minimal
-claude  # Start new session
-
-# Switch to frontend profile before UI work
-./scripts/switch-profile.sh frontend
-claude  # Playwright + context7 loaded, others excluded
-```
-
-See **[docs/ADVANCED.md](./docs/ADVANCED.md#token-optimization)** for the complete optimization guide, including all three phases and the profile system.
-
-**Note:** Savings projections are based on theoretical analysis. Actual reduction depends on codebase structure and task types.
-
-## Layout
-
-```
-.claude/
-  settings.json         Baseline permissions + hooks + MCP config
-  agents/               architect, frontend-dev, backend-dev, qa-lead, devops, data-engineer
-                        + code-reviewer (symlinked from superpowers)
-  commands/             ticket.md (agency feature-ticket workflow)
-                        + brainstorm/write-plan/execute-plan (symlinked from superpowers)
-  hooks/                detect-ticket.sh (UserPromptSubmit)
-  skills/               14 superpowers skills (symlinked): brainstorming, writing-plans,
-                        executing-plans, test-driven-development, using-git-worktrees,
-                        dispatching-parallel-agents, requesting-code-review,
-                        finishing-a-development-branch, systematic-debugging, etc.
-
-templates/
-  CLAUDE.md.python      Python + Flake8 template
-  CLAUDE.md.node        Node / TS template
-  CLAUDE.md.nextjs      Next.js template
-  CLAUDE.md.nestjs      NestJS microservice template
-
-pre-commit/
-  .pre-commit-config.python.yaml
-  .pre-commit-config.node.yaml
-
-vendor/                 External tools vendored as git submodules
-  superpowers/          Plugin: TDD + worktree + review skills (obra)
-  graphify/             Skill: knowledge-graph indexing (safishamsi)
-  awesome-claude-code/  Reference: curated index of skills/hooks/agents
-
-scripts/
-  bootstrap.sh          Install plugins + MCPs globally
-  new-project.sh        Clone blueprint into a new project dir
-```
-
-## Working with `vendor/`
-
-These are **read-only reference copies** pinned to a known-good commit. Team members can:
-
-- **Inspect source** to understand how a skill/plugin works before trusting it
-- **Fork** any of them by adding their own remote
-- **Update** via `git submodule update --remote vendor/<name>`
-- **Clone the blueprint with submodules**: `git clone --recurse-submodules <blueprint-url>` (or `git submodule update --init` after a plain clone)
-
-Installation still happens via the official marketplaces / registries through `bootstrap.sh` — the vendored copies are for inspection, not installation targets.
-
-## Agent roster
-
-We keep only **role-specialist** agents that add real value over upstream:
-
-| Agent | Purpose | Why custom (vs upstream) |
-|---|---|---|
-| `architect` | System design, ADRs, tradeoffs | Upstream stubs are too thin |
-| `frontend-dev` | React / Next / RN, a11y, Tailwind | No upstream equivalent |
-| `backend-dev` | Node/Nest/FastAPI, DB, migrations, security | Upstream `*-specialist.md` are 6 lines |
-| `qa-lead` | Test strategy, release gates, bug triage | No upstream equivalent |
-| `devops` | Docker / CI / IaC / secrets | Upstream `devops/ci-cd/` is stubs |
-| `data-engineer` | Pipelines, warehouse, dbt, streaming | No upstream equivalent |
-| `code-reviewer` | **Symlinked from superpowers** | Theirs is already excellent |
-
-Workflow verbs (plan, review, execute, TDD, worktree, finish branch) come from **superpowers skills** — we don't reinvent them.
-
-## Feature-ticket workflow
-
-Paste a ticket URL (ClickUp / Linear / GitHub / Jira) in the prompt — the `UserPromptSubmit` hook detects it and nudges Claude to run `/ticket <url>`.
-
-```
-/ticket https://app.clickup.com/t/abc123
-  → [0] fetch + classify (feature/bug/chore/spike)
-  → [1] architect writes plan
-  → [2] code-reviewer adversarially reviews the plan
-  → [3] architect produces v2 plan addressing blockers
-  → [4] approval gate  (skip with --auto)
-  → [5] scripts/workflow/feature.sh creates worktree + branch
-  → [6] dispatch parallel: backend-dev / frontend-dev / data-engineer / devops (as needed)
-       each writes failing test first (TDD skill)
-  → [7] scripts/workflow/finish.sh — lint + typecheck + tests
-  → [8] auto-fix loop (max 3 iterations)
-  → [9] commit + push + gh pr create, return PR URL
-```
-
-Files driving this:
-- `.claude/commands/ticket.md` — the slash command
-- `.claude/hooks/detect-ticket.sh` — auto-detects ticket URLs in user messages
-- `scripts/workflow/feature.sh` — worktree + branch creation
-- `scripts/workflow/finish.sh` — runs the release gate
-
-## Orchestrator (`orchestrator/`) — unattended intake + budget + Slack
-
-Run it as a daemon to pick up tickets without a human kicking off each one:
-
-```bash
-cp config/orchestrator.example.json config/orchestrator.json    # edit: sources, caps, Slack
-./scripts/start-orchestrator.sh                                   # background daemon
-```
-
-What it does every tick (default 60s):
-
-1. **Polls sources** — GitHub (`gh` CLI), local filesystem, ClickUp, Linear, Jira, or [beads](https://github.com/gastownhall/beads) (dependency-graph task tracker); see `orchestrator/README.md` for setup per source
-2. **Spawns a headless Claude Code session per new ticket** — runs `/ticket <url> --auto`
-3. **Tails** `~/.claude-agency/events.jsonl` for blocker / completion events from every session
-4. **Enforces budget** — per-ticket cap, daily cap, kill-switch via `touch ~/.claude-agency/KILLSWITCH`
-5. **Notifies Slack** on blocker / budget cap / ticket complete / error
-
-Full docs: `orchestrator/README.md`. **Start with `spawn.dry_run: true`** — it prints the command without executing so you can verify the template before going live.
-
-## Dashboard (`dashboard/`)
-
-Lightweight web UI to see every active agent across every project you have open. No deps, no build step — plain Node + vanilla JS.
-
-```bash
-node dashboard/server.mjs   # http://127.0.0.1:7842
-```
-
-Zones: **Meeting Room** (waiting for you — click to reply), **Office** (working), **Cafeteria** (idle), **Tickets** (per-branch activity).
-
-Data flow:
-```
-Claude Code hooks → ~/.claude-agency/events.jsonl → server → WebSocket push to dashboard (falls back to polling if disconnected)
-                                                      └── /api/unblock → ~/.claude-agency/inbox/<session>.txt
-```
-
-Hooks are registered in `.claude/settings.json` (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStop`) and all funnel through `.claude/hooks/agency-emit.sh`.
-
-**Self-resume**: agents that block on `/wait-for-reply "<question>"` show up in the dashboard **Meeting Room**; your reply in the dashboard lands in `~/.claude-agency/inbox/<session>.txt`, the agent picks it up, and continues in the same turn. `/check-inbox` is the non-blocking variant for start-of-turn pulls. See `dashboard/README.md` for the full loop.
-
 ## Tips for New Users
 
 You don't need to touch the orchestrator or write config to get value from this blueprint day-to-day. Here's the minimum useful workflow:
@@ -236,7 +61,7 @@ You don't call the dashboard from your prompts. Just use `claude` in your projec
 
 **3. When an agent lands in "Meeting Room," reply from the dashboard.**
 
-If you kick off a longer task (especially anything using `/ticket` or a subagent that calls `/wait-for-reply`) and it needs your input, you don't have to keep the terminal in focus. Just glance at the dashboard, click the blocked agent's card in **Meeting Room**, type your answer, and submit. The agent picks it up and keeps going — no need to switch back to the terminal at the exact right moment. (See "Self-resume" above, or `dashboard/README.md`, for how `/wait-for-reply` and the inbox handoff work under the hood.)
+If you kick off a longer task (especially anything using `/ticket` or a subagent that calls `/wait-for-reply`) and it needs your input, you don't have to keep the terminal in focus. Just glance at the dashboard, click the blocked agent's card in **Meeting Room**, type your answer, and submit. The agent picks it up and keeps going — no need to switch back to the terminal at the exact right moment. (See "Self-resume" in the Dashboard section below, or `dashboard/README.md`, for how `/wait-for-reply` and the inbox handoff work under the hood.)
 
 **4. Use `/check-inbox` if you're back at the terminal and want to check for a reply yourself.**
 
@@ -297,6 +122,181 @@ Then point the orchestrator at it in `config/orchestrator.json`:
 ```
 
 Once running, the orchestrator polls `bd ready` — tasks still blocked on an open dependency are automatically excluded, so you never get an agent spawned on work that isn't actually startable yet. When an agent finishes a ticket, the orchestrator calls `bd close` for you, so beads' own graph stays accurate and the next dependent task becomes "ready" without you touching anything by hand. Full details (claim/close behavior, `BEADS_DIR` for non-standard database locations): `orchestrator/README.md`.
+
+## Getting Help
+
+Having issues? Check our comprehensive [Troubleshooting Guide](docs/TROUBLESHOOTING.md) for solutions to common problems:
+
+- Bootstrap failures (Node/Python/CLI issues)
+- Adoption problems (Git, framework detection)
+- Orchestrator issues (config, budget, stuck tickets)
+- Dashboard problems (blank page, performance)
+- Agent crashes and profile errors
+
+For additional support:
+- Run diagnostics: `./scripts/doctor.sh`
+- Check [Setup Guide](docs/SETUP.md) or [Advanced Guide](docs/ADVANCED.md)
+- Review [recent changes](docs/CHANGELOG.md)
+- Report issues: [GitHub Issues](https://github.com/your-org/claude-agency-blueprint/issues)
+
+## Feature-ticket workflow
+
+Paste a ticket URL (ClickUp / Linear / GitHub / Jira) in the prompt — the `UserPromptSubmit` hook detects it and nudges Claude to run `/ticket <url>`.
+
+```
+/ticket https://app.clickup.com/t/abc123
+  → [0] fetch + classify (feature/bug/chore/spike)
+  → [1] architect writes plan
+  → [2] code-reviewer adversarially reviews the plan
+  → [3] architect produces v2 plan addressing blockers
+  → [4] approval gate  (skip with --auto)
+  → [5] scripts/workflow/feature.sh creates worktree + branch
+  → [6] dispatch parallel: backend-dev / frontend-dev / data-engineer / devops (as needed)
+       each writes failing test first (TDD skill)
+  → [7] scripts/workflow/finish.sh — lint + typecheck + tests
+  → [8] auto-fix loop (max 3 iterations)
+  → [9] commit + push + gh pr create, return PR URL
+```
+
+Files driving this:
+- `.claude/commands/ticket.md` — the slash command
+- `.claude/hooks/detect-ticket.sh` — auto-detects ticket URLs in user messages
+- `scripts/workflow/feature.sh` — worktree + branch creation
+- `scripts/workflow/finish.sh` — runs the release gate
+
+## Agent roster
+
+We keep only **role-specialist** agents that add real value over upstream:
+
+| Agent | Purpose | Why custom (vs upstream) |
+|---|---|---|
+| `architect` | System design, ADRs, tradeoffs | Upstream stubs are too thin |
+| `frontend-dev` | React / Next / RN, a11y, Tailwind | No upstream equivalent |
+| `backend-dev` | Node/Nest/FastAPI, DB, migrations, security | Upstream `*-specialist.md` are 6 lines |
+| `qa-lead` | Test strategy, release gates, bug triage | No upstream equivalent |
+| `devops` | Docker / CI / IaC / secrets | Upstream `devops/ci-cd/` is stubs |
+| `data-engineer` | Pipelines, warehouse, dbt, streaming | No upstream equivalent |
+| `code-reviewer` | **Symlinked from superpowers** | Theirs is already excellent |
+
+Workflow verbs (plan, review, execute, TDD, worktree, finish branch) come from **superpowers skills** — we don't reinvent them.
+
+## Token Optimization
+
+The blueprint includes built-in optimizations targeting 70-90% reduction in wasted context:
+
+**Phase 1 (Core):**
+- **`.claudeignore`** — Filters noise files (dependencies, build outputs)
+- **Smart file reading** — Agents follow purposeful reading patterns
+- **Haiku for exploration** — Cheaper model for discovery tasks
+- **Graphify indexing** — Query graph instead of reading files repeatedly
+
+**Phase 2 (Templates & Tools):**
+- **Template library** — Reusable code patterns (2K-5K tokens per new file)
+- **AST navigation** — Structural search without reading full files
+- **Module batching** — Read related files together efficiently
+
+**Phase 3 (Dynamic Context):**
+- **Profile-based MCP loading** — Activate only needed MCPs per task (30-60% savings)
+- **Conditional agent dispatch** — Load agents only when plan requires them (built-in)
+
+```bash
+# Switch to minimal profile for exploration
+./scripts/switch-profile.sh minimal
+claude  # Start new session
+
+# Switch to frontend profile before UI work
+./scripts/switch-profile.sh frontend
+claude  # Playwright + context7 loaded, others excluded
+```
+
+See **[docs/ADVANCED.md](./docs/ADVANCED.md#token-optimization)** for the complete optimization guide, including all three phases and the profile system.
+
+**Note:** Savings projections are based on theoretical analysis. Actual reduction depends on codebase structure and task types.
+
+## Orchestrator (`orchestrator/`) — unattended intake + budget + Slack
+
+Run it as a daemon to pick up tickets without a human kicking off each one:
+
+```bash
+cp config/orchestrator.example.json config/orchestrator.json    # edit: sources, caps, Slack
+./scripts/start-orchestrator.sh                                   # background daemon
+```
+
+What it does every tick (default 60s):
+
+1. **Polls sources** — GitHub (`gh` CLI), local filesystem, ClickUp, Linear, Jira, or [beads](https://github.com/gastownhall/beads) (dependency-graph task tracker); see `orchestrator/README.md` for setup per source
+2. **Spawns a headless Claude Code session per new ticket** — runs `/ticket <url> --auto`
+3. **Tails** `~/.claude-agency/events.jsonl` for blocker / completion events from every session
+4. **Enforces budget** — per-ticket cap, daily cap, kill-switch via `touch ~/.claude-agency/KILLSWITCH`
+5. **Notifies Slack** on blocker / budget cap / ticket complete / error
+
+Full docs: `orchestrator/README.md`. **Start with `spawn.dry_run: true`** — it prints the command without executing so you can verify the template before going live.
+
+## Dashboard (`dashboard/`)
+
+Lightweight web UI to see every active agent across every project you have open. No deps, no build step — plain Node + vanilla JS.
+
+```bash
+node dashboard/server.mjs   # http://127.0.0.1:7842
+```
+
+Zones: **Meeting Room** (waiting for you — click to reply), **Office** (working), **Cafeteria** (idle), **Tickets** (per-branch activity).
+
+Data flow:
+```
+Claude Code hooks → ~/.claude-agency/events.jsonl → server → WebSocket push to dashboard (falls back to polling if disconnected)
+                                                      └── /api/unblock → ~/.claude-agency/inbox/<session>.txt
+```
+
+Hooks are registered in `.claude/settings.json` (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStop`) and all funnel through `.claude/hooks/agency-emit.sh`.
+
+**Self-resume**: agents that block on `/wait-for-reply "<question>"` show up in the dashboard **Meeting Room**; your reply in the dashboard lands in `~/.claude-agency/inbox/<session>.txt`, the agent picks it up, and continues in the same turn. `/check-inbox` is the non-blocking variant for start-of-turn pulls. See `dashboard/README.md` for the full loop.
+
+## Layout
+
+```
+.claude/
+  settings.json         Baseline permissions + hooks + MCP config
+  agents/               architect, frontend-dev, backend-dev, qa-lead, devops, data-engineer
+                        + code-reviewer (symlinked from superpowers)
+  commands/             ticket.md (agency feature-ticket workflow)
+                        + brainstorm/write-plan/execute-plan (symlinked from superpowers)
+  hooks/                detect-ticket.sh (UserPromptSubmit)
+  skills/               14 superpowers skills (symlinked): brainstorming, writing-plans,
+                        executing-plans, test-driven-development, using-git-worktrees,
+                        dispatching-parallel-agents, requesting-code-review,
+                        finishing-a-development-branch, systematic-debugging, etc.
+
+templates/
+  CLAUDE.md.python      Python + Flake8 template
+  CLAUDE.md.node        Node / TS template
+  CLAUDE.md.nextjs      Next.js template
+  CLAUDE.md.nestjs      NestJS microservice template
+
+pre-commit/
+  .pre-commit-config.python.yaml
+  .pre-commit-config.node.yaml
+
+vendor/                 External tools vendored as git submodules
+  superpowers/          Plugin: TDD + worktree + review skills (obra)
+  graphify/             Skill: knowledge-graph indexing (safishamsi)
+  awesome-claude-code/  Reference: curated index of skills/hooks/agents
+
+scripts/
+  bootstrap.sh          Install plugins + MCPs globally
+  new-project.sh        Clone blueprint into a new project dir
+```
+
+## Working with `vendor/`
+
+These are **read-only reference copies** pinned to a known-good commit. Team members can:
+
+- **Inspect source** to understand how a skill/plugin works before trusting it
+- **Fork** any of them by adding their own remote
+- **Update** via `git submodule update --remote vendor/<name>`
+- **Clone the blueprint with submodules**: `git clone --recurse-submodules <blueprint-url>` (or `git submodule update --init` after a plain clone)
+
+Installation still happens via the official marketplaces / registries through `bootstrap.sh` — the vendored copies are for inspection, not installation targets.
 
 ## Customizing per Team
 

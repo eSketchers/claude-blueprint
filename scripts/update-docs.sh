@@ -54,11 +54,12 @@ run() { if [[ $DRY_RUN -eq 1 ]]; then printf 'DRY: %s\n' "$*"; else eval "$@"; f
 mkdir -p reports
 echo "===== update-docs: $(date -u +%Y-%m-%dT%H:%M:%SZ) range=$RANGE base=$BASE_BRANCH =====" | tee -a reports/update-docs.log
 
-# Run the doc generation headless. In dry-run, ask the command to report only.
+# Run the doc generation headless (--no-prompt: never ask the operator anything).
+# In dry-run, ask the command to report only.
 if [[ $DRY_RUN -eq 1 ]]; then
-  echo "DRY: $CLAUDE_BIN -p \"/update-docs --report-only --range $RANGE\""
+  echo "DRY: $CLAUDE_BIN -p \"/update-docs --report-only --range $RANGE --no-prompt\""
 else
-  "$CLAUDE_BIN" -p "/update-docs --range $RANGE" >> reports/update-docs.log 2>&1 || true
+  "$CLAUDE_BIN" -p "/update-docs --range $RANGE --no-prompt" >> reports/update-docs.log 2>&1 || true
 fi
 
 # Deliver only if /update-docs actually wrote something under docs/.

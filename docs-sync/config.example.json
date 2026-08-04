@@ -10,6 +10,14 @@
     "changelog": "docs/CHANGELOG.md"
   },
 
+  "external_docs": {
+    "_comment_1": "For projects whose docs live OUTSIDE the repo (Notion, Confluence, GitBook, ReadMe, a wiki, a plain URL). On the first interactive /update-docs run, if the project has no in-repo docs, the operator is asked whether docs live elsewhere; a link given here is recorded in docs/README.md and used below.",
+    "_comment_2": "provider: notion|confluence|gitbook|readme|wiki|url|null. url: the link. prompted: set true once asked so it never re-prompts. Leave url null to have docs generated in-repo instead.",
+    "provider": null,
+    "url": null,
+    "prompted": false
+  },
+
   "sections": {
     "_comment": "Toggle each surface. A section regenerates only when its bucket in the change-report is non-empty.",
     "architecture": true,

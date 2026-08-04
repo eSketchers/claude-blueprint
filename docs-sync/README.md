@@ -23,6 +23,16 @@ The bot never writes to a protected branch — the PR review is the gate.
 3. **Add the `ANTHROPIC_API_KEY` repo secret** (GitHub → Settings → Secrets → Actions) — the Actions path needs it; a script can't set it.
 4. Verify: `gh workflow run update-docs.yml` or `bash scripts/update-docs.sh --local --dry-run`.
 
+## Docs kept elsewhere? (first-run bootstrap)
+
+If a project has **no in-repo docs**, the first *interactive* `/update-docs` run asks whether the
+docs live somewhere else (Notion / Confluence / GitBook / ReadMe / a URL). If you give a link, it's
+written into `docs/README.md` (a "📚 Documentation lives here → …" pointer, committed) and recorded
+in `docs-sync/config.json` (`external_docs`) so it never re-asks. Choose "generate in this repo" to
+scaffold `docs/` instead. Headless/CI runs (`--no-prompt`) never prompt — they just honour whatever
+`external_docs.url` is already set. Pre-seed it by filling `external_docs` in the config. The link is
+only stored, never scraped (importing external content is a separate opt-in step).
+
 ## Swap the trigger (n8n / orchestrator / cron)
 
 GitHub Actions is the default, but the tool is **transport-agnostic** — everything meets at one

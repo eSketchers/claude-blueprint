@@ -1,6 +1,6 @@
 ---
 description: On merge to a configured branch, regenerate the affected docs (backend / schema / frontend inventories, a module+function reference, and a changelog entry) and open a draft PR. Deterministic classifier + incremental LLM narration.
-argument-hint: [--report-only] [--range A..B] [--base <ref>] [--head <ref>] [--config <path>]
+argument-hint: [--report-only] [--range A..B] [--base <ref>] [--head <ref>] [--config <path>] [--no-prompt]
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
@@ -14,6 +14,7 @@ Arguments: `$ARGUMENTS`
 - `--report-only` — classify + plan the doc edits and print them, but **write nothing**.
 - `--range A..B` / `--base` / `--head` — the merge range (default `HEAD~1..HEAD`).
 - `--config <path>` — config file (default `docs-sync/config.json`).
+- `--no-prompt` — never ask the operator anything (headless/CI). The wrapper `scripts/update-docs.sh` always passes this.
 
 ## Guardrails (non-negotiable)
 
@@ -24,6 +25,21 @@ Arguments: `$ARGUMENTS`
 - **`CHANGELOG.md` is append-only** — add one dated entry, never rewrite history.
 - **Idempotent** — re-running on the same range must produce zero `git diff` under `docs/`.
 - Respect the config `enabled` gate and the `branches` list.
+
+## Phase 0 — Bootstrap (first run: are the docs elsewhere?)
+
+Runs only in **interactive** mode (skip entirely if `--no-prompt` is set — CI/headless never asks).
+
+1. Decide if the project already has in-repo docs: check whether `docs.output_dir` (default `docs/`) exists and contains any human-written markdown beyond the generated scaffold. Also treat it as "handled" if `external_docs.url` is already set **or** `external_docs.prompted` is true.
+2. **If docs are absent and the question hasn't been asked yet**, prompt the operator (use the AskUserQuestion tool):
+   > "This project has no documentation in the repo. Do you keep your docs somewhere else?"
+   Offer: **Notion**, **Confluence**, **GitBook / ReadMe**, **A wiki / other URL**, **No — generate docs in this repo**.
+3. **If they name an external location**, ask for the link, then **add it to the project**:
+   - Create/patch `docs/README.md` — write the URL inside its `<!-- AUTO-DOC:START external-docs -->` region as a clear "📚 Documentation lives here → <url>" pointer (provider labelled).
+   - Record it in `docs-sync/config.json`: set `external_docs.provider`, `external_docs.url`, and `external_docs.prompted: true` (so it never re-asks). Commit `docs/README.md` (config.json is gitignored).
+   - Tell the operator that in-repo generation is now a lightweight companion to the external source of truth (the migration-log + code reference still generate; narrative overview links out).
+4. **If they choose in-repo** (or decline), set `external_docs.prompted: true` and scaffold the `docs/` tree, then continue normally.
+5. Never fetch or scrape the external site — only store the link. (Importing external content is a separate, opt-in step.)
 
 ## Phase 1 — Classify
 

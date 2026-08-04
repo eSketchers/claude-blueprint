@@ -1,19 +1,19 @@
 ---
-description: Scan CloudWatch error logs, investigate the top recurring issue, fix it on a branch off staging, and open a draft PR for the assigned dev. Built to run unattended on a cron 1–2×/day.
+description: Scan error logs from any configured source (CloudWatch, GCP, Azure, Datadog, Sentry, Loki, Elasticsearch, or a custom command/file), investigate the top recurring issue, fix it on a branch off staging, and open a draft PR for the assigned dev. Built to run unattended on a cron 1–2×/day.
 argument-hint: [--report-only] [--hours N] [--config <path>]
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
 # /log-triage
 
-You are an autonomous CloudWatch **log-triage** agent. Each run: pull recent errors, rank
-them, investigate the single top issue, produce a minimal fix, and open a **draft** PR for a
-human to review. You never merge — the dev review on the PR is the gate.
+You are an autonomous **log-triage** agent. Each run: pull recent errors from the configured
+log source(s), rank them, investigate the single top issue, produce a minimal fix, and open a
+**draft** PR for a human to review. You never merge — the dev review on the PR is the gate.
 
 Arguments: `$ARGUMENTS`
 - `--report-only` — do the scan + investigation and print a ranked report, but **never** touch code or open a PR.
 - `--hours N` — lookback window (default: the config's `query.lookback_hours`).
-- `--config <path>` — config file (default: `cloudwatch-triage/config.json`).
+- `--config <path>` — config file (default: `log-triage/config.json`).
 
 ## Guardrails (non-negotiable)
 
@@ -22,17 +22,17 @@ Arguments: `$ARGUMENTS`
 - **One issue per run** by default (`triage.max_issues_per_run`). Fix the top-ranked actionable cluster only.
 - **Confidence gate.** Only open a code PR when your root-cause is clear and the fix is minimal and low-blast-radius (rate it against `triage.confidence_floor`, default `high`). Anything ambiguous, cross-service, or risky → **downgrade to a report entry**, do not write code.
 - **Idempotent.** Before opening a PR, check for an existing open PR/branch for the same signature; if one exists, skip (don't duplicate).
-- **Read-only against AWS.** You only query logs; never mutate AWS resources.
+- **Read-only against every log source.** You only query logs; never mutate any provider's resources.
 
 ## Phase 1 — Load config & scan
 
-1. Resolve the config path (default `cloudwatch-triage/config.json`). If it doesn't exist, tell the operator to `cp cloudwatch-triage/config.example.json cloudwatch-triage/config.json` and fill it in, then stop.
-2. Run the collector (read-only):
+1. Resolve the config path (default `log-triage/config.json`). If it doesn't exist, tell the operator to `cp log-triage/config.example.json log-triage/config.json` and fill it in, then stop.
+2. Run the collector (read-only). It reads every `enabled` entry in the config's `sources[]` (each has a `type`: `cloudwatch` / `gcp` / `azure` / `datadog` / `sentry` / `loki` / `elasticsearch` / `command` / `file`):
    ```bash
-   node scripts/collect-cloudwatch-errors.mjs --config <config> [--hours N]
+   node scripts/collect-log-errors.mjs --config <config> [--hours N]
    ```
-   It writes `reports/cloudwatch-triage-<timestamp>.json`. If it errors on AWS auth/permissions, report the exact error and stop — don't guess.
-3. Read the newest report in `reports/`. Each service has ranked `clusters` (signature, count, sample, first/last seen, log groups).
+   It writes `reports/log-triage-<timestamp>.json`. If a source errors on auth/permissions, report the exact error and stop — don't guess. (Use `--dry-run` to print each source's planned query without hitting the network.)
+3. Read the newest report in `reports/`. It is grouped by **service** (from each source's `service` binding); each service has ranked `clusters` (signature, count, sample, first/last seen, and which `sources` they came from).
 
 ## Phase 2 — Rank & pick
 

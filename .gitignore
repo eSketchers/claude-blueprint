@@ -17,6 +17,6 @@ node_modules/
 *.backup-*
 agents.backup/
 
-# CloudWatch log-triage — live config (names internal log groups) + run output
-cloudwatch-triage/config.json
+# log-triage — live config (names internal log groups / hosts) + run output
+log-triage/config.json
 reports/

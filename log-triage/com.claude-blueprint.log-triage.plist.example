@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  launchd template for the CloudWatch log-triage cron (macOS).
+  launchd template for the multi-source log-triage cron (macOS).
 
   Setup:
     1. Replace __BLUEPRINT_DIR__ below with the absolute path to your checkout, e.g.

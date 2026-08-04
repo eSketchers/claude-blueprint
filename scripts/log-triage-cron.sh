@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # log-triage-cron.sh — headless wrapper that runs the /log-triage command on a schedule.
 #
-# Designed for launchd/cron on the machine that already has your AWS creds, `gh` auth,
-# and the service repo checkouts (see cloudwatch-triage/README.md). Logs each run to
+# Designed for launchd/cron on the machine that already has your log-source creds, `gh` auth,
+# and the service repo checkouts (see log-triage/README.md). Logs each run to
 # reports/log-triage-cron.log.
 #
 # Usage:

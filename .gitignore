@@ -16,3 +16,7 @@ node_modules/
 # Claude Agency Blueprint - Configuration backups
 *.backup-*
 agents.backup/
+
+# log-triage — live config (names internal log groups / hosts) + run output
+log-triage/config.json
+reports/

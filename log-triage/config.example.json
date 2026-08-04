@@ -1,0 +1,157 @@
+{
+  "_comment": "Copy to log-triage/config.json and edit. Drives scripts/collect-log-errors.mjs and the /log-triage command. The live config.json is gitignored. Multi-source: each entry in `sources` has a `type` and is bound to a `service` (the repo the fix is made in). Mirrors the orchestrator's sources[] convention.",
+
+  "query": {
+    "_comment_1": "Global defaults applied to every source. `pattern` is the case-insensitive OR-list of error markers; cloud adapters push it server-side, file/command adapters filter client-side.",
+    "_comment_2": "lookback_hours: default window (override with --hours). limit: max lines per source. min_occurrences: drop clusters seen fewer times.",
+    "pattern": ["ERROR", "Unhandled", "Exception", "Traceback", "5xx", "FATAL"],
+    "lookback_hours": 24,
+    "limit": 1000,
+    "min_occurrences": 2
+  },
+
+  "sources": [
+    {
+      "_comment": "AWS CloudWatch Logs Insights. Needs the aws CLI + read-only logs:StartQuery/GetQueryResults. log_groups are EXACT names (aws logs describe-log-groups).",
+      "type": "cloudwatch",
+      "name": "orders-aws",
+      "enabled": true,
+      "service": "orders-service",
+      "profile": "default",
+      "region": "us-east-1",
+      "log_groups": ["/ecs/orders-service-staging"]
+    },
+    {
+      "_comment": "Google Cloud Logging via the gcloud CLI. `filter` overrides the default severity>=ERROR + time-window filter.",
+      "type": "gcp",
+      "name": "orders-gcp",
+      "enabled": false,
+      "service": "orders-service",
+      "project": "my-gcp-project",
+      "filter": null
+    },
+    {
+      "_comment": "Azure Monitor Log Analytics via the az CLI. `query` overrides the default KQL; table is used when query is omitted.",
+      "type": "azure",
+      "name": "orders-azure",
+      "enabled": false,
+      "service": "orders-service",
+      "workspace_id": "00000000-0000-0000-0000-000000000000",
+      "table": "AppTraces",
+      "query": null
+    },
+    {
+      "_comment": "Datadog Logs Search API. api_key_env/app_key_env name the env vars holding the keys (never the raw keys). `query` is Datadog log search syntax.",
+      "type": "datadog",
+      "name": "orders-dd",
+      "enabled": false,
+      "service": "orders-service",
+      "site": "datadoghq.com",
+      "api_key_env": "DD_API_KEY",
+      "app_key_env": "DD_APP_KEY",
+      "query": "service:orders-service status:error"
+    },
+    {
+      "_comment": "Sentry issues API (each unresolved issue = one clustered row). token_env names the env var with a Sentry auth token.",
+      "type": "sentry",
+      "name": "orders-sentry",
+      "enabled": false,
+      "service": "orders-service",
+      "base_url": "https://sentry.io",
+      "org": "my-org",
+      "project": "orders-service",
+      "token_env": "SENTRY_AUTH_TOKEN"
+    },
+    {
+      "_comment": "Grafana Loki query_range. `query` is a LogQL selector; set `tenant` for multi-tenant (X-Scope-OrgID).",
+      "type": "loki",
+      "name": "orders-loki",
+      "enabled": false,
+      "service": "orders-service",
+      "base_url": "http://loki.internal:3100",
+      "query": "{app=\"orders-service\"} |~ \"(?i)error\"",
+      "tenant": null
+    },
+    {
+      "_comment": "Elasticsearch / OpenSearch _search. api_key_env optional (Authorization: ApiKey). `query` overrides the auto-built DSL; timestamp_field/message_field name the source fields.",
+      "type": "elasticsearch",
+      "name": "orders-es",
+      "enabled": false,
+      "service": "orders-service",
+      "base_url": "http://localhost:9200",
+      "index": "app-logs-*",
+      "timestamp_field": "@timestamp",
+      "message_field": "message",
+      "api_key_env": "ES_API_KEY",
+      "query": null
+    },
+    {
+      "_comment": "UNIVERSAL escape hatch — runs any shell command and parses its stdout. Works with ANY provider (kubectl logs, curl to an API, journalctl, etc.). format: lines | json | jsonl; timestamp_field/message_field apply to json/jsonl.",
+      "type": "command",
+      "name": "any-provider",
+      "enabled": false,
+      "service": "orders-service",
+      "run": "gcloud logging read 'severity>=ERROR' --freshness=24h --format=json",
+      "format": "json",
+      "timestamp_field": "timestamp",
+      "message_field": "textPayload"
+    },
+    {
+      "_comment": "Local log files (plain lines or JSONL). `path` supports comma-separated paths and single-level * globs.",
+      "type": "file",
+      "name": "local-app-log",
+      "enabled": false,
+      "service": "orders-service",
+      "path": "/var/log/app/*.log",
+      "format": "lines"
+    }
+  ],
+
+  "services": [
+    {
+      "_comment": "Repo binding for the fix step, referenced by source.service. One entry per service; multiple sources may point at the same service.",
+      "name": "orders-service",
+      "repo": "your-org/orders-service",
+      "repo_path": "/absolute/path/to/your/local/clone",
+      "base_branch": "staging",
+      "feedback_command": "npm test",
+      "assignee": null
+    }
+  ],
+
+  "defaults": {
+    "_comment_1": "Applied to any service that doesn't override the field.",
+    "_comment_2": "assignee.github: handle to assign/request-review. assignee.email: dev notified (defaults to the Claude account email).",
+    "default_base_branch": "staging",
+    "assignee": {
+      "github": "your-github-handle",
+      "email": "abdul.wahab@luladelivery.com"
+    }
+  },
+
+  "triage": {
+    "_comment_1": "max_issues_per_run: how many top-ranked clusters to fix per run. Keep at 1 until trusted.",
+    "_comment_2": "draft_prs: always open PRs as drafts. auto_fix false = report-only. confidence_floor: only clusters rated >= this get a code PR.",
+    "max_issues_per_run": 1,
+    "draft_prs": true,
+    "auto_fix": true,
+    "confidence_floor": "high",
+    "branch_prefix": "fix/log-triage"
+  },
+
+  "notifier": {
+    "_comment_1": "How the assigned dev is told about a PR. github_review_request always fires.",
+    "_comment_2": "email.transport: 'gmail-mcp' for interactive runs; headless cron should use 'ses' or 'none'.",
+    "github_review_request": true,
+    "slack": {
+      "enabled": false,
+      "webhook_url_env": "AGENCY_SLACK_WEBHOOK",
+      "channel": "#log-triage"
+    },
+    "email": {
+      "enabled": true,
+      "transport": "gmail-mcp",
+      "ses_from": "log-triage@your-domain.com"
+    }
+  }
+}

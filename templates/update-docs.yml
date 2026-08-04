@@ -1,0 +1,69 @@
+# Auto-updating documentation — shipped into adopted projects by adopt.sh.
+# On merge to a doc-trigger branch, regenerate docs and open a DRAFT PR.
+# Requires an ANTHROPIC_API_KEY repository secret (adopt.sh prints a reminder).
+name: Update Docs
+
+on:
+  push:
+    branches: [staging, main]        # adjust to match docs-sync/config.json "branches"
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: 'Base SHA to diff from (defaults to the previous commit)'
+        required: false
+
+concurrency:
+  group: update-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-docs:
+    # never react to the bot's own docs commits
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ast-grep (symbol extraction)
+        run: npm install -g @ast-grep/cli
+
+      - name: Configure git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Compute range + classify (cheap; gates the expensive LLM step)
+        id: classify
+        run: |
+          BEFORE="${{ github.event.inputs.base_sha || github.event.before }}"
+          if [ -z "$BEFORE" ] || echo "$BEFORE" | grep -qE '^0+$'; then BEFORE="$(git rev-parse HEAD~1)"; fi
+          RANGE="${BEFORE}..${GITHUB_SHA}"
+          echo "range=$RANGE" >> "$GITHUB_OUTPUT"
+          node scripts/collect-doc-changes.mjs --config docs-sync/config.json --range "$RANGE" || true
+          latest="$(ls -t reports/doc-changes-*.json 2>/dev/null | head -1 || true)"
+          if [ -n "$latest" ] && node -e "process.exit(JSON.parse(require('fs').readFileSync('$latest')).empty ? 1 : 0)"; then
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate docs + open draft PR
+        if: steps.classify.outputs.relevant == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/update-docs.sh --range "${{ steps.classify.outputs.range }}"

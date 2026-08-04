@@ -1,0 +1,51 @@
+{
+  "_comment": "Copy to docs-sync/config.json and edit. Drives scripts/collect-doc-changes.mjs, scripts/extract-symbols.mjs, and the /update-docs command. The live config.json is gitignored. Runs on merge to a `branches` entry and opens a draft PR — never commits to a protected branch.",
+
+  "enabled": true,
+  "branches": ["staging", "main"],
+
+  "docs": {
+    "_comment": "output_dir: the living-docs folder (only files here are ever edited). changelog: the append-only file.",
+    "output_dir": "docs",
+    "changelog": "docs/CHANGELOG.md"
+  },
+
+  "sections": {
+    "_comment": "Toggle each surface. A section regenerates only when its bucket in the change-report is non-empty.",
+    "architecture": true,
+    "backend": true,
+    "schema": true,
+    "frontend": true
+  },
+
+  "generation": {
+    "_comment": "auto_doc_markers: wrap generated blocks in <!-- AUTO-DOC:START ... --> so hand-written prose is never clobbered. use_ast: allow ast-grep-based extraction.",
+    "auto_doc_markers": true,
+    "use_ast": true
+  },
+
+  "llm_narration": {
+    "_comment": "When true, /update-docs writes the 'why/impact' prose outside the markers, grounded in the diff. When false, only deterministic inventories + changelog are produced.",
+    "enabled": true
+  },
+
+  "symbol_reference": {
+    "_comment_1": "The module + function-level reference (TypeDoc/pydoc-style). Whole-repo backfill, then incremental: only symbols whose bodyHash changed get re-described.",
+    "_comment_2": "max_new_per_run caps LLM cost on the first (backfill) pass so it can span several PRs. include/exclude are globs; tests/vendor/node_modules/migrations are excluded by default.",
+    "enabled": true,
+    "output_dir": "docs/reference",
+    "languages": ["ts", "js", "python"],
+    "include": [],
+    "exclude": [],
+    "max_new_per_run": 40
+  },
+
+  "mappings": {
+    "_comment": "Optional per-framework overrides for where backend/schema/frontend code lives. Omit to use the built-in DEFAULT_MAPPINGS. Keys: python|node|nextjs|nestjs|django-react, each with backend/schema/frontend glob arrays.",
+    "_example": { "django-react": { "backend": ["backend/**"], "schema": ["backend/**/migrations/**"], "frontend": ["frontend/src/**"] } }
+  },
+
+  "delivery": "pr",
+  "draft_prs": true,
+  "trigger": "github-actions"
+}

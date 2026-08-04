@@ -23,6 +23,7 @@ PROFILE=""
 FORCE=0
 NO_PRECOMMIT=0
 NO_GRAPHIFY_HOOK=0
+NO_DOCS_UPDATER=0
 DRY_RUN=0
 ACTION="adopt"   # adopt | uninstall | doctor
 QUIET=0
@@ -49,6 +50,8 @@ Other options:
                           match detection, e.g. a Python-only repo that also wants Node linters.
   --no-graphify-hook      Skip installing graphify's post-commit/post-checkout git hooks
                           (incremental, no-LLM knowledge-graph rebuild after each commit).
+  --no-docs-updater       Skip provisioning the auto-docs updater (docs-sync config,
+                          update-docs workflow + scripts, local post-merge hook).
   --merge-strategy S      How to handle existing CLAUDE.md: merge|overwrite|backup-only (default: merge).
   --dry-run               Print every op, change nothing.
   --diff                  With --dry-run: show a real diff for files that would be modified
@@ -85,6 +88,7 @@ while [[ $# -gt 0 ]]; do
     --force)       FORCE=1; shift ;;
     --no-precommit) NO_PRECOMMIT=1; shift ;;
     --no-graphify-hook) NO_GRAPHIFY_HOOK=1; shift ;;
+    --no-docs-updater) NO_DOCS_UPDATER=1; shift ;;
     --precommit-template)
       PRECOMMIT_TEMPLATE="${2:?}"
       [[ "$PRECOMMIT_TEMPLATE" =~ ^(python|node|merged)$ ]] || die "Invalid --precommit-template: $PRECOMMIT_TEMPLATE (must be python|node|merged)"
@@ -819,6 +823,31 @@ case "$ACTION" in
       else
         log "graphify not installed — skipping git hook install. Run './scripts/bootstrap.sh' first, or pass --no-graphify-hook to silence this."
       fi
+    fi
+
+    # auto-docs (docs-sync) — provision the merge-triggered documentation updater.
+    # The /update-docs command is copied with the other commands above; here we add
+    # the scripts, the per-project config, the CI workflow, gitignore lines, and the
+    # local post-merge fallback hook. All ops are guarded so a partial blueprint or a
+    # missing .git/hooks never aborts adoption.
+    if [[ $NO_DOCS_UPDATER -eq 0 ]]; then
+      run "mkdir -p \"$PROJECT_ROOT/scripts\" \"$PROJECT_ROOT/docs-sync\" \"$PROJECT_ROOT/.github/workflows\""
+      for f in collect-doc-changes.mjs extract-symbols.mjs update-docs.sh; do
+        [[ -f "$BLUEPRINT_RESOLVED/scripts/$f" ]] && run "cp \"$BLUEPRINT_RESOLVED/scripts/$f\" \"$PROJECT_ROOT/scripts/$f\""
+      done
+      [[ -f "$PROJECT_ROOT/scripts/update-docs.sh" ]] && run "chmod +x \"$PROJECT_ROOT/scripts/update-docs.sh\""
+      # copy-if-absent so re-adopt never clobbers an edited config
+      if [[ ! -f "$PROJECT_ROOT/docs-sync/config.json" && -f "$BLUEPRINT_RESOLVED/docs-sync/config.example.json" ]]; then
+        run "cp \"$BLUEPRINT_RESOLVED/docs-sync/config.example.json\" \"$PROJECT_ROOT/docs-sync/config.json\""
+      fi
+      [[ -f "$BLUEPRINT_RESOLVED/templates/update-docs.yml" ]] && run "cp \"$BLUEPRINT_RESOLVED/templates/update-docs.yml\" \"$PROJECT_ROOT/.github/workflows/update-docs.yml\""
+      # local post-merge fallback — append-if-exists, never clobber a real hook
+      if [[ $DRY_RUN -eq 0 && -d "$PROJECT_ROOT/.git/hooks" && -f "$BLUEPRINT_RESOLVED/hooks/post-merge.sample" && ! -f "$PROJECT_ROOT/.git/hooks/post-merge" ]]; then
+        cp "$BLUEPRINT_RESOLVED/hooks/post-merge.sample" "$PROJECT_ROOT/.git/hooks/post-merge" && chmod +x "$PROJECT_ROOT/.git/hooks/post-merge" || warn "post-merge hook install failed (non-fatal)"
+      fi
+      ensure_gitignore_line "docs-sync/config.json"
+      ensure_gitignore_line "reports/"
+      log "auto-docs: provisioned. Add an ANTHROPIC_API_KEY repo secret for the GitHub Actions path (adopt can't set secrets); adjust docs-sync/config.json 'branches'."
     fi
 
     # Self-test: one symlink must resolve

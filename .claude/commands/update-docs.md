@@ -1,0 +1,68 @@
+---
+description: On merge to a configured branch, regenerate the affected docs (backend / schema / frontend inventories, a module+function reference, and a changelog entry) and open a draft PR. Deterministic classifier + incremental LLM narration.
+argument-hint: [--report-only] [--range A..B] [--base <ref>] [--head <ref>] [--config <path>]
+allowed-tools: Read, Write, Edit, Bash, Grep, Glob
+---
+
+# /update-docs
+
+You keep an in-repo `docs/` folder current so humans and Claude can understand the project.
+Each run: diff the merge, regenerate the affected doc sections, and (unless report-only) leave a
+**draft PR**. You never write to protected branches — the PR review is the gate.
+
+Arguments: `$ARGUMENTS`
+- `--report-only` — classify + plan the doc edits and print them, but **write nothing**.
+- `--range A..B` / `--base` / `--head` — the merge range (default `HEAD~1..HEAD`).
+- `--config <path>` — config file (default `docs-sync/config.json`).
+
+## Guardrails (non-negotiable)
+
+- **Only edit files under `docs.output_dir`** (default `docs/`). Never touch source code.
+- **Never invent** an API/table/route/component/symbol that isn't in the change-report or symbols-report.
+- **Never re-generate a symbol whose `bodyHash` is unchanged** — reuse its existing prose verbatim (zero cost).
+- **Regenerate only inside `<!-- AUTO-DOC:START … -->` / `END` markers.** Prose outside markers is hand-written — never touch it.
+- **`CHANGELOG.md` is append-only** — add one dated entry, never rewrite history.
+- **Idempotent** — re-running on the same range must produce zero `git diff` under `docs/`.
+- Respect the config `enabled` gate and the `branches` list.
+
+## Phase 1 — Classify
+
+1. Resolve the config (default `docs-sync/config.json`); if missing, tell the operator to `cp docs-sync/config.example.json docs-sync/config.json`, then stop.
+2. Run the deterministic collector:
+   ```bash
+   node scripts/collect-doc-changes.mjs --config <config> --range <A..B>
+   ```
+   Read the newest `reports/doc-changes-*.json`. If `empty: true`, **no-op** — print "no doc-relevant changes" and stop (open no PR).
+
+## Phase 2 — Plan
+
+For each `sections.*` that is enabled **and** has a non-empty bucket, list the doc files you'll regenerate. If `--report-only`, print the plan and **stop**.
+
+## Phase 3 — Deterministic inventory blocks
+
+Inside the `AUTO-DOC` markers of the affected section docs, regenerate the factual inventories from the report (endpoints, routes, components, tables). For `schema/migration-log.md` and `CHANGELOG.md`, **append** new entries only (dedupe against what's already there).
+
+## Phase 3b — Symbol reference (if `symbol_reference.enabled`)
+
+1. Run the extractor: `node scripts/extract-symbols.mjs --config <config>` → read `reports/symbols-*.json`.
+2. For each module, read the existing reference page under `symbol_reference.output_dir` (default `docs/reference/`) and collect the `<!-- sym:<id> hash:<h> -->` markers already present.
+3. **Only** LLM-describe symbols that are new or whose `hash` differs from the marker (respect `max_new_per_run` — if exceeded, do the top N and note the remainder as pending). For each, write a concise "what it does / params / returns" entry, wrapped in `AUTO-DOC` markers, ending with `<!-- sym:<id> hash:<h> -->`.
+4. Symbols missing from the report are removed; unchanged symbols are left exactly as-is.
+
+## Phase 4 — Narration (if `llm_narration.enabled`)
+
+Update the prose **outside** the markers (the "why / impact" overview) grounded in the report + a `Read` of the changed files. Keep it tight; don't restate the inventories.
+
+## Phase 5 — Changelog
+
+Append one dated Keep-a-Changelog entry summarizing the merge (Added/Changed/Fixed), deduped against the latest entry.
+
+## Phase 6 — Deliver
+
+The wrapper `scripts/update-docs.sh` handles delivery (draft PR on a `docs/auto-update-<ts>` branch). When invoked directly, print a summary of the sections changed, the symbol counts (new/updated/unchanged), and the draft-PR URL if one was opened.
+
+## Failure modes — fail loud
+
+- Collector/extractor errors → report the exact error, stop. Don't fabricate docs.
+- `empty` report → no-op, no PR. A valid outcome.
+- ast-grep missing (symbol reference on) → skip Phase 3b with a clear warning; still do the inventory + changelog.

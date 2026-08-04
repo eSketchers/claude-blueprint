@@ -16,3 +16,7 @@ node_modules/
 # Claude Agency Blueprint - Configuration backups
 *.backup-*
 agents.backup/
+
+# Auto-docs (docs-sync) — live config + run reports
+docs-sync/config.json
+reports/

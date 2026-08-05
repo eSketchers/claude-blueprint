@@ -23,6 +23,19 @@ The bot never writes to a protected branch — the PR review is the gate.
 3. **Add the `ANTHROPIC_API_KEY` repo secret** (GitHub → Settings → Secrets → Actions) — the Actions path needs it; a script can't set it.
 4. Verify: `gh workflow run update-docs.yml` or `bash scripts/update-docs.sh --local --dry-run`.
 
+## Two delivery models
+
+1. **Post-merge → separate draft PR** (default). GitHub Actions fires on merge to a `branches`
+   entry; `update-docs.sh` opens a `docs/auto-update-*` draft PR.
+2. **In-PR → same branch** (via the `/ticket` workflow's Phase 8.5, or `update-docs.sh --in-place`).
+   Docs for the change are regenerated **in place** and committed into the *same* branch/PR as the
+   code, so a reviewer sees code + docs together. The `/ticket` path does this directly inside its
+   own Claude session (no nested `claude -p`, so no recursion) and gates on the deterministic
+   collector — if the change touches no backend/schema/frontend, it skips.
+
+Both can run together: `/ticket` keeps each feature PR's docs fresh; the merge workflow is the
+backstop for changes that didn't go through `/ticket`.
+
 ## Docs kept elsewhere? (first-run bootstrap)
 
 If a project has **no in-repo docs**, the first *interactive* `/update-docs` run asks whether the

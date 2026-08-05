@@ -21,11 +21,13 @@ export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:$PATH"
 RANGE=""
 DRY_RUN=0
 MODE="local"
+IN_PLACE=0     # --in-place: stage docs onto the CURRENT branch, no separate PR
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --range) RANGE="$2"; shift 2 ;;
     --ci)    MODE="ci"; shift ;;
     --local) MODE="local"; shift ;;
+    --in-place) IN_PLACE=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
@@ -65,6 +67,14 @@ fi
 # Deliver only if /update-docs actually wrote something under docs/.
 if [[ $DRY_RUN -eq 0 ]] && git diff --quiet -- docs/; then
   echo "No docs changes — nothing to deliver." | tee -a reports/update-docs.log
+  exit 0
+fi
+
+# --in-place: stage docs onto the CURRENT branch (for the /ticket finish phase or a
+# Stop/pre-push hook) so they ride along in the developer's own PR. No branch, no PR.
+if [[ $IN_PLACE -eq 1 ]]; then
+  run "git add \"$(git rev-parse --show-toplevel)/docs\""
+  echo "Staged docs/ onto $BASE_BRANCH (in-place) — commit them with your change." | tee -a reports/update-docs.log
   exit 0
 fi
 

@@ -118,16 +118,27 @@ If tests or lint fail:
 - Up to **3 iterations**: feed failures back to the responsible agent(s), let them fix, re-run.
 - After 3 failed iterations: stop, report what's stuck, ask the user.
 
+## Phase 8.5 — Refresh docs in-PR (docs-sync)
+
+If `docs-sync/config.json` exists and its `enabled` is true, regenerate the affected docs so they
+ride along **in this ticket's PR** (no separate docs PR). Do it **in this session** — you already
+have Read/Write/Edit — do **not** spawn a nested `claude -p` (that would recurse).
+
+1. Classify the ticket's own changes: `node scripts/collect-doc-changes.mjs --config docs-sync/config.json --base <base-branch-from-Phase-5> --head HEAD`. Read the newest `reports/doc-changes-*.json`. If `empty: true`, **skip this phase**.
+2. Otherwise apply `/update-docs` **in place** for the non-empty surfaces: Phase 3 (regenerate inventory blocks inside `AUTO-DOC` markers) + Phase 5 (append one changelog entry). If `symbol_reference.enabled` **and** `ast-grep` is installed, also Phase 3b (describe only changed symbols); if `llm_narration.enabled`, Phase 4. Skip 3b gracefully with a note when `ast-grep` is absent.
+3. Guardrails (same as `/update-docs`): only touch files under `docs.output_dir`; regenerate only inside `AUTO-DOC` markers; `CHANGELOG.md` append-only; never open a separate PR here.
+4. Stage the result: `git add <docs.output_dir>` so it's committed with the code in Phase 9.
+
 ## Phase 9 — Commit & PR
 
 Use superpowers `finishing-a-development-branch` skill:
 
 1. `pre-commit run --all-files` (one last pass)
-2. Commits in logical units, conventional format: `feat(scope): ...`, `test(scope): ...`. Never one mega-commit.
+2. Commits in logical units, conventional format: `feat(scope): ...`, `test(scope): ...`, and a separate `docs(scope): ...` commit for any Phase 8.5 doc changes. Never one mega-commit.
 3. `git push -u origin <branch>`
 4. Open PR with `gh pr create`:
    - Title: ticket title
-   - Body: v2 plan as "## Summary", linked to the ticket URL, with a "## Test plan" section from the plan
+   - Body: v2 plan as "## Summary", linked to the ticket URL, with a "## Test plan" section from the plan. Note in the body if docs were refreshed in-PR.
 5. Return the PR URL.
 
 ## Output
@@ -136,4 +147,5 @@ Short summary at the end:
 - Ticket + classification
 - Plan file paths
 - PR URL
+- Docs refreshed in-PR? (which sections, or "skipped — no doc-relevant changes")
 - Any warnings (skipped steps, auto-fix iterations used, etc.)

@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
 # update-docs.sh — the single integration seam for the auto-docs pipeline.
 #
-# Every trigger (GitHub Actions, n8n, the orchestrator, cron, or a local
-# post-merge hook) computes a commit range and calls this wrapper; it runs
-# /update-docs headless and delivers a DRAFT PR on a docs/auto-update-<ts>
-# branch. The collector/extractor/command never change per trigger.
+# The pre-push hook calls this to generate docs that travel WITH the code.
+# Other triggers (n8n, orchestrator, cron) can also call it.
 #
 # Usage:
-#   ./scripts/update-docs.sh --range <A>..<B>      # explicit range
-#   ./scripts/update-docs.sh --ci                  # read github.event before/after
-#   ./scripts/update-docs.sh --local               # default HEAD~1..HEAD
-#   ./scripts/update-docs.sh --range A..B --dry-run # print the git/gh commands only
+#   ./scripts/update-docs.sh --range <A>..<B> --in-place     # stage docs onto current branch
+#   ./scripts/update-docs.sh --local --in-place               # default HEAD~1..HEAD
+#   ./scripts/update-docs.sh --range A..B --in-place --dry-run
+#   ./scripts/update-docs.sh --range A..B --no-prompt          # headless, no operator questions
 
 set -euo pipefail
 
@@ -21,13 +19,15 @@ export PATH="/usr/local/bin:/opt/homebrew/bin:$HOME/.local/bin:$PATH"
 RANGE=""
 DRY_RUN=0
 MODE="local"
-IN_PLACE=0     # --in-place: stage docs onto the CURRENT branch, no separate PR
+IN_PLACE=0
+NO_PROMPT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --range) RANGE="$2"; shift 2 ;;
     --ci)    MODE="ci"; shift ;;
     --local) MODE="local"; shift ;;
     --in-place) IN_PLACE=1; shift ;;
+    --no-prompt) NO_PROMPT="--no-prompt"; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
@@ -37,7 +37,6 @@ done
 if [[ -z "$RANGE" ]]; then
   if [[ "$MODE" == "ci" && -n "${GITHUB_EVENT_BEFORE:-}" && -n "${GITHUB_SHA:-}" ]]; then
     BEFORE="$GITHUB_EVENT_BEFORE"
-    # New-branch / force-push guard: all-zeros before -> fall back to last commit.
     if [[ "$BEFORE" =~ ^0+$ ]]; then RANGE="HEAD~1..HEAD"; else RANGE="${BEFORE}..${GITHUB_SHA}"; fi
   else
     RANGE="HEAD~1..HEAD"
@@ -47,48 +46,35 @@ fi
 CLAUDE_BIN="$(command -v claude || true)"
 if [[ -z "$CLAUDE_BIN" ]]; then echo "error: 'claude' CLI not found on PATH" >&2; exit 127; fi
 
-TS="$(date -u +%Y%m%d-%H%M%S)"
-BRANCH="docs/auto-update-${TS}"
 BASE_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
 run() { if [[ $DRY_RUN -eq 1 ]]; then printf 'DRY: %s\n' "$*"; else eval "$@"; fi; }
 
 mkdir -p reports
-echo "===== update-docs: $(date -u +%Y-%m-%dT%H:%M:%SZ) range=$RANGE base=$BASE_BRANCH =====" | tee -a reports/update-docs.log
+echo "===== update-docs: $(date -u +%Y-%m-%dT%H:%M:%SZ) range=$RANGE base=$BASE_BRANCH in-place=$IN_PLACE =====" | tee -a reports/update-docs.log
 
-# Run the doc generation headless (--no-prompt: never ask the operator anything).
-# In dry-run, ask the command to report only.
+# Run the doc generation headless.
 if [[ $DRY_RUN -eq 1 ]]; then
-  echo "DRY: $CLAUDE_BIN -p \"/update-docs --report-only --range $RANGE --no-prompt\""
+  echo "DRY: $CLAUDE_BIN -p \"/update-docs --report-only --range $RANGE $NO_PROMPT\""
 else
-  "$CLAUDE_BIN" -p "/update-docs --range $RANGE --no-prompt" >> reports/update-docs.log 2>&1 || true
+  "$CLAUDE_BIN" -p "/update-docs --range $RANGE $NO_PROMPT" >> reports/update-docs.log 2>&1 || true
 fi
 
-# Deliver only if /update-docs actually wrote something under docs/.
+# Check if docs actually changed.
 if [[ $DRY_RUN -eq 0 ]] && git diff --quiet -- docs/; then
   echo "No docs changes — nothing to deliver." | tee -a reports/update-docs.log
   exit 0
 fi
 
-# --in-place: stage docs onto the CURRENT branch (for the /ticket finish phase or a
-# Stop/pre-push hook) so they ride along in the developer's own PR. No branch, no PR.
+# --in-place: stage docs onto the CURRENT branch (for the pre-push hook) so
+# they travel with the developer's own push. No separate branch, no PR.
 if [[ $IN_PLACE -eq 1 ]]; then
   run "git add \"$(git rev-parse --show-toplevel)/docs\""
-  echo "Staged docs/ onto $BASE_BRANCH (in-place) — commit them with your change." | tee -a reports/update-docs.log
+  echo "Staged docs/ onto $BASE_BRANCH (in-place)." | tee -a reports/update-docs.log
   exit 0
 fi
 
-run "git checkout -B \"$BRANCH\""
+# Fallback: standalone commit on the current branch (for manual / cron runs).
 run "git add docs/"
-run "git -c user.name='claude-docs-bot' -c user.email='noreply@anthropic.com' commit -m \"docs: auto-update for $RANGE [skip ci]\" -m \"Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>\""
-run "git push -u origin \"$BRANCH\""
-
-# Reuse an existing open PR for this base if present (idempotent), else create one.
-if [[ $DRY_RUN -eq 1 ]]; then
-  echo "DRY: gh pr create --base \"$BASE_BRANCH\" --head \"$BRANCH\" --draft --title 'docs: auto-update' --body '...'"
-else
-  gh pr create --base "$BASE_BRANCH" --head "$BRANCH" --draft \
-    --title "docs: auto-update for merge to $BASE_BRANCH" \
-    --body "Auto-generated by \`/update-docs\` for range \`$RANGE\`. Deterministic inventories + incremental symbol reference + changelog. **Unreviewed — draft.**" \
-    || echo "gh pr create skipped/failed (may already exist)"
-fi
+run "git -c user.name='claude-docs-bot' -c user.email='noreply@anthropic.com' commit -m \"docs: auto-update for $RANGE\" -m \"Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>\""
+echo "Committed docs/ onto $BASE_BRANCH." | tee -a reports/update-docs.log

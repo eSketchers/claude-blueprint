@@ -75,7 +75,7 @@ Append one dated Keep-a-Changelog entry summarizing the merge (Added/Changed/Fix
 
 ## Phase 6 — Deliver
 
-The wrapper `scripts/update-docs.sh` handles delivery (draft PR on a `docs/auto-update-<ts>` branch). When invoked directly, print a summary of the sections changed, the symbol counts (new/updated/unchanged), and the draft-PR URL if one was opened.
+The **pre-push hook** (`hooks/pre-push.sample`) calls `scripts/update-docs.sh --in-place`, which stages the generated docs onto the current branch. The hook then commits them so they travel **with the push** — no separate PR, no CI workflow. When invoked directly (e.g. `/update-docs` in an interactive session), print a summary of the sections changed and the symbol counts (new/updated/unchanged).
 
 ## Failure modes — fail loud
 

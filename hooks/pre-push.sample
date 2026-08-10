@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Git pre-push hook — runs BEFORE git push completes.
+#
+# Installation (per project — adopt.sh does this):
+#   cp hooks/pre-push.sample .git/hooks/pre-push
+#   chmod +x .git/hooks/pre-push
+#
+# Generates/refreshes documentation and commits it onto the branch being pushed,
+# so docs travel WITH the code — no separate PR, no CI workflow needed. Uses your
+# local `claude` auth (no ANTHROPIC_API_KEY secret required). Non-blocking: if doc
+# generation fails the push still goes through (the hook exits 0 either way).
+
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')"
+
+# Skip if auto-docs isn't configured, or if we're on a detached HEAD / rebase.
+if [[ ! -x "$ROOT/scripts/update-docs.sh" || ! -f "$ROOT/docs-sync/config.json" || -z "$BRANCH" || "$BRANCH" == "HEAD" ]]; then
+  exit 0
+fi
+
+# Skip if the push target is a docs-only branch (avoid recursive generation).
+if [[ "$BRANCH" == docs/* ]]; then
+  exit 0
+fi
+
+echo "[pre-push] auto-docs: generating documentation for this push…"
+
+# Determine the range of commits being pushed (compare local HEAD to what's on the remote).
+REMOTE_SHA="$(git rev-parse "origin/$BRANCH" 2>/dev/null || echo '')"
+if [[ -z "$REMOTE_SHA" ]]; then
+  # New branch: diff against the merge-base with the default branch.
+  DEFAULT_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's#refs/remotes/origin/##' || echo 'main')"
+  RANGE="$(git merge-base "$DEFAULT_BRANCH" HEAD 2>/dev/null || echo 'HEAD~1')..HEAD"
+else
+  RANGE="${REMOTE_SHA}..HEAD"
+fi
+
+# Run the collector + /update-docs, stage docs onto the current branch.
+if "$ROOT/scripts/update-docs.sh" --range "$RANGE" --in-place --no-prompt 2>/dev/null; then
+  # If docs changed, commit them onto the branch so they're part of this push.
+  if ! git diff --cached --quiet -- docs/; then
+    git commit -m "docs: auto-update for $RANGE" \
+      -m "Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>" \
+      --no-verify  # skip hooks on the docs commit itself to prevent recursion
+    echo "[pre-push] auto-docs: committed updated docs onto $BRANCH."
+  else
+    echo "[pre-push] auto-docs: no doc changes for this push."
+  fi
+else
+  echo "[pre-push] auto-docs: generation skipped (non-fatal)."
+fi
+
+# Always exit 0 — never block a push because of docs.
+exit 0

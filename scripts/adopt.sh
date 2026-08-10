@@ -825,13 +825,12 @@ case "$ACTION" in
       fi
     fi
 
-    # auto-docs (docs-sync) — provision the merge-triggered documentation updater.
+    # auto-docs (docs-sync) — provision the pre-push documentation updater.
     # The /update-docs command is copied with the other commands above; here we add
-    # the scripts, the per-project config, the CI workflow, gitignore lines, and the
-    # local post-merge fallback hook. All ops are guarded so a partial blueprint or a
-    # missing .git/hooks never aborts adoption.
+    # the scripts, the per-project config, gitignore lines, and the pre-push hook
+    # that generates docs WITH each push. No CI workflow needed.
     if [[ $NO_DOCS_UPDATER -eq 0 ]]; then
-      run "mkdir -p \"$PROJECT_ROOT/scripts\" \"$PROJECT_ROOT/docs-sync\" \"$PROJECT_ROOT/.github/workflows\""
+      run "mkdir -p \"$PROJECT_ROOT/scripts\" \"$PROJECT_ROOT/docs-sync\""
       for f in collect-doc-changes.mjs extract-symbols.mjs update-docs.sh; do
         [[ -f "$BLUEPRINT_RESOLVED/scripts/$f" ]] && run "cp \"$BLUEPRINT_RESOLVED/scripts/$f\" \"$PROJECT_ROOT/scripts/$f\""
       done
@@ -840,14 +839,13 @@ case "$ACTION" in
       if [[ ! -f "$PROJECT_ROOT/docs-sync/config.json" && -f "$BLUEPRINT_RESOLVED/docs-sync/config.example.json" ]]; then
         run "cp \"$BLUEPRINT_RESOLVED/docs-sync/config.example.json\" \"$PROJECT_ROOT/docs-sync/config.json\""
       fi
-      [[ -f "$BLUEPRINT_RESOLVED/templates/update-docs.yml" ]] && run "cp \"$BLUEPRINT_RESOLVED/templates/update-docs.yml\" \"$PROJECT_ROOT/.github/workflows/update-docs.yml\""
-      # local post-merge fallback — append-if-exists, never clobber a real hook
-      if [[ $DRY_RUN -eq 0 && -d "$PROJECT_ROOT/.git/hooks" && -f "$BLUEPRINT_RESOLVED/hooks/post-merge.sample" && ! -f "$PROJECT_ROOT/.git/hooks/post-merge" ]]; then
-        cp "$BLUEPRINT_RESOLVED/hooks/post-merge.sample" "$PROJECT_ROOT/.git/hooks/post-merge" && chmod +x "$PROJECT_ROOT/.git/hooks/post-merge" || warn "post-merge hook install failed (non-fatal)"
+      # pre-push hook — generates docs with each push; append-if-exists, never clobber
+      if [[ $DRY_RUN -eq 0 && -d "$PROJECT_ROOT/.git/hooks" && -f "$BLUEPRINT_RESOLVED/hooks/pre-push.sample" && ! -f "$PROJECT_ROOT/.git/hooks/pre-push" ]]; then
+        cp "$BLUEPRINT_RESOLVED/hooks/pre-push.sample" "$PROJECT_ROOT/.git/hooks/pre-push" && chmod +x "$PROJECT_ROOT/.git/hooks/pre-push" || warn "pre-push hook install failed (non-fatal)"
       fi
       ensure_gitignore_line "docs-sync/config.json"
       ensure_gitignore_line "reports/"
-      log "auto-docs: provisioned. Add an ANTHROPIC_API_KEY repo secret for the GitHub Actions path (adopt can't set secrets); adjust docs-sync/config.json 'branches'."
+      log "auto-docs: provisioned. Docs will be generated with each git push via the pre-push hook."
     fi
 
     # Self-test: one symlink must resolve

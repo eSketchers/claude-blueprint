@@ -33,7 +33,6 @@ for fw in python node nextjs nestjs; do
   assert "[$fw] settings.json valid JSON"   "jq . '$tmp/.claude/settings.json' > /dev/null"
   assert "[$fw] update-docs command copied"  "[[ -f '$tmp/.claude/commands/update-docs.md' ]]"
   assert "[$fw] docs-sync config generated"  "[[ -f '$tmp/docs-sync/config.json' ]]"
-  assert "[$fw] update-docs workflow copied"  "[[ -f '$tmp/.github/workflows/update-docs.yml' ]]"
   assert "[$fw] collector script copied"      "[[ -f '$tmp/scripts/collect-doc-changes.mjs' ]]"
   assert "[$fw] .gitignore has docs-sync cfg" "grep -qxF 'docs-sync/config.json' '$tmp/.gitignore'"
   if [[ "$fw" == "python" || "$fw" == "nestjs" ]]; then

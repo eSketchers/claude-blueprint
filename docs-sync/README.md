@@ -1,9 +1,10 @@
 # Auto-Updating Documentation (docs-sync)
 
-Keeps an in-repo `docs/` folder current so humans and Claude can understand the project. On merge
-to a configured branch it diffs the change, classifies files into **backend / schema / frontend**,
-regenerates the affected doc sections + a **module/function reference**, and opens a **draft PR**.
-The bot never writes to a protected branch — the PR review is the gate.
+Keeps an in-repo `docs/` folder current so humans and Claude can understand the project. On every
+**`git push`**, a pre-push hook diffs the commits being pushed, classifies files into **backend /
+schema / frontend**, regenerates the affected doc sections + a **module/function reference**, and
+commits the updated docs **onto the same branch** — so documentation always travels with the code.
+No separate PR, no CI workflow, no secrets needed (uses your local `claude` auth).
 
 ## Pieces
 
@@ -12,54 +13,38 @@ The bot never writes to a protected branch — the PR review is the gate.
 | `scripts/collect-doc-changes.mjs` | Zero-dep deterministic classifier: `git diff` → detect frameworks → classify each path (`schema > backend > frontend`) → change-report JSON. |
 | `scripts/extract-symbols.mjs` | ast-grep-based symbol extractor: enumerates exported functions/classes + signatures, hashes each body (the incremental-skip key). |
 | `.claude/commands/update-docs.md` → `/update-docs` | Reads the reports → regenerates inventories inside `AUTO-DOC` markers → LLM-describes only changed symbols → appends a changelog entry. |
-| `scripts/update-docs.sh` | The integration **seam**: any trigger calls `update-docs.sh --range A..B` and gets a draft PR. |
-| `docs-sync/config.example.json` | Copy to `config.json` (gitignored). Branches, section toggles, `symbol_reference`, mappings. |
-| `templates/update-docs.yml` | GitHub Actions workflow shipped into adopted projects. |
+| `scripts/update-docs.sh` | The integration **seam**: the pre-push hook calls `update-docs.sh --range A..B --in-place`. |
+| `hooks/pre-push.sample` | The git hook — installed at `.git/hooks/pre-push` by `adopt.sh`. |
+| `docs-sync/config.example.json` | Copy to `config.json` (gitignored). Section toggles, `symbol_reference`, mappings. |
+
+## How it works
+
+1. You run `git push`.
+2. The **pre-push hook** fires before the push completes.
+3. It computes the range of commits being pushed (local HEAD vs. what's on the remote).
+4. It calls `scripts/update-docs.sh --range <range> --in-place --no-prompt`, which runs the collector + `/update-docs` headlessly.
+5. If docs changed, the hook commits them onto the current branch.
+6. The push completes — your code **and** the updated docs go up together.
+
+If doc generation fails for any reason, the push still goes through (the hook always exits 0).
 
 ## Setup (adopted project)
 
-1. Adoption copies these files and generates `docs-sync/config.json` (see the blueprint's `adopt.sh`).
-2. Edit `docs-sync/config.json`: set `enabled`, the trigger `branches`, section toggles, and any per-framework `mappings`.
-3. **Add the `ANTHROPIC_API_KEY` repo secret** (GitHub → Settings → Secrets → Actions) — the Actions path needs it; a script can't set it.
-4. Verify: `gh workflow run update-docs.yml` or `bash scripts/update-docs.sh --local --dry-run`.
-
-## Two delivery models
-
-1. **Post-merge → separate draft PR** (default). GitHub Actions fires on merge to a `branches`
-   entry; `update-docs.sh` opens a `docs/auto-update-*` draft PR.
-2. **In-PR → same branch** (via the `/ticket` workflow's Phase 8.5, or `update-docs.sh --in-place`).
-   Docs for the change are regenerated **in place** and committed into the *same* branch/PR as the
-   code, so a reviewer sees code + docs together. The `/ticket` path does this directly inside its
-   own Claude session (no nested `claude -p`, so no recursion) and gates on the deterministic
-   collector — if the change touches no backend/schema/frontend, it skips.
-
-Both can run together: `/ticket` keeps each feature PR's docs fresh; the merge workflow is the
-backstop for changes that didn't go through `/ticket`.
+1. `adopt.sh --detect` copies the scripts, generates `docs-sync/config.json`, and installs the pre-push hook.
+2. Edit `docs-sync/config.json`: set `enabled`, section toggles, and any per-framework `mappings`.
+3. Push something — docs are generated automatically. No secrets, no CI setup needed.
 
 ## Docs kept elsewhere? (first-run bootstrap)
 
 If a project has **no in-repo docs**, the first *interactive* `/update-docs` run asks whether the
 docs live somewhere else (Notion / Confluence / GitBook / ReadMe / a URL). If you give a link, it's
-written into `docs/README.md` (a "📚 Documentation lives here → …" pointer, committed) and recorded
-in `docs-sync/config.json` (`external_docs`) so it never re-asks. Choose "generate in this repo" to
-scaffold `docs/` instead. Headless/CI runs (`--no-prompt`) never prompt — they just honour whatever
-`external_docs.url` is already set. Pre-seed it by filling `external_docs` in the config. The link is
-only stored, never scraped (importing external content is a separate opt-in step).
-
-## Swap the trigger (n8n / orchestrator / cron)
-
-GitHub Actions is the default, but the tool is **transport-agnostic** — everything meets at one
-seam: `bash scripts/update-docs.sh --range A..B`. To drive it from elsewhere, point that trigger at
-the seam; nothing else changes:
-
-- **n8n** — GitHub "push to `staging`/`main`" webhook → a runner (repo + `node`/`ast-grep`/`gh` + `ANTHROPIC_API_KEY`) → `update-docs.sh --range <before>..<after>` → post the draft-PR link to Slack.
-- **Orchestrator** — add a merge-watch source that spawns the wrapper (reuses its budget/notify machinery).
-- **Cron / local `post-merge` hook** — already covered by `update-docs.sh` + `hooks/post-merge.sample`.
+written into `docs/README.md` and recorded in `docs-sync/config.json` (`external_docs`) so it never
+re-asks. Headless runs (`--no-prompt`) honour whatever `external_docs.url` is already set.
 
 ## Verification
 
 ```bash
 node --test tests/scripts/collect-doc-changes.test.mjs tests/scripts/extract-symbols.test.mjs
 node scripts/collect-doc-changes.mjs --range HEAD~5..HEAD --dry-run
-bash scripts/update-docs.sh --local --dry-run
+bash scripts/update-docs.sh --local --in-place --dry-run
 ```

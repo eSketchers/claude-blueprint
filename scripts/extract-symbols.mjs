@@ -141,6 +141,16 @@ export function scopeFilter(path, { include = [], exclude = [] } = {}) {
   return true;
 }
 
+/**
+ * Filter the full symbols list to those belonging to a single source file.
+ * Used by /update-docs when generating per-file docs.
+ * @param {string} filePath
+ * @param {Array<{file:string}>} symbols
+ */
+export function symbolsForFile(filePath, symbols) {
+  return symbols.filter((s) => s.file === filePath);
+}
+
 // ---------------- main (needs ast-grep) ----------------
 
 function hasAstGrep() {

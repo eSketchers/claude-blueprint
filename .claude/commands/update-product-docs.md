@@ -148,19 +148,56 @@ Append one plain-language entry to `docs/WHATS-NEW.md`.
 
 ```
 
-## Phase 5 — mint.json sync
+## Phase 5 — mint.json
 
-Regenerate `docs/mint.json` **only** if any guide was added, renamed, or deleted in this run. Skip if only existing guides were modified.
+Always generate or update `docs/mint.json` — this is what Mintlify reads to build the site.
 
-**Also run on `--bootstrap`** (first time).
+**Full regeneration when any of these are true:**
+- `docs/mint.json` does not exist
+- `--bootstrap` was passed
+- A guide was added, renamed, or deleted in this run
 
-**Skip if** `config.mintlify.enabled` is `false` or not set.
+**Partial update (navigation only) otherwise** — rebuild the `navigation` array from the current `docs/guides/` contents, keep all other `mint.json` fields (colors, name, etc.) unchanged.
 
+**Generate by scanning `docs/` structure:**
+
+```json
+{
+  "name": "<project_name from config.mintlify.project_name, or directory name>",
+  "navigation": [
+    {
+      "group": "What's New",
+      "pages": ["WHATS-NEW"]
+    },
+    {
+      "group": "Product Guides",
+      "pages": ["guides/<feature1>", "guides/<feature2>", ...]
+    },
+    {
+      "group": "System Overview",
+      "pages": ["OVERVIEW"]
+    }
+  ],
+  "colors": {
+    "primary": "#0D9373"
+  }
+}
+```
+
+**Rules:**
+- Only include pages that actually exist in `docs/`
+- Omit "What's New" group if `docs/WHATS-NEW.md` does not exist
+- Omit "Product Guides" group if `docs/guides/` is empty
+- Omit "System Overview" group if `docs/OVERVIEW.md` does not exist
+- Page paths are relative to `docs/` and have no `.md` extension: `"guides/checkout"` not `"guides/checkout.md"`
+- Never include code-level docs (`src/`, `backend.md`, `frontend.md`, `ARCHITECTURE.md`, `CHANGELOG.md`) in navigation
+
+**If `scripts/generate-mint-json.mjs` exists**, use it:
 ```bash
 node scripts/generate-mint-json.mjs --config <config>
 ```
 
-This writes `docs/mint.json` with the current navigation structure. Idempotent.
+**Otherwise**, write `docs/mint.json` directly from the scan above.
 
 ## Phase 6 — Deliver
 

@@ -38,17 +38,22 @@ else
   RANGE="${REMOTE_SHA}..HEAD"
 fi
 
-# Run the collector + /update-docs, stage docs onto the current branch.
-if "$ROOT/scripts/update-docs.sh" --range "$RANGE" --in-place --no-prompt 2>/dev/null; then
-  # If docs changed, commit them onto the branch so they're part of this push.
-  if ! git diff --cached --quiet -- docs/; then
-    git commit --amend --no-edit --no-verify  # fold docs into HEAD; --no-verify prevents hook recursion
-    echo "[pre-push] auto-docs: amended HEAD with updated docs on $BRANCH."
-  else
-    echo "[pre-push] auto-docs: no doc changes for this push."
-  fi
+# Run /update-docs (code-level: per-file docs, ARCHITECTURE.md, CHANGELOG.md).
+"$ROOT/scripts/update-docs.sh" --range "$RANGE" --in-place --no-prompt 2>/dev/null || true
+
+# Run /update-product-docs (product-level: feature guides, OVERVIEW.md, WHATS-NEW.md, mint.json).
+if command -v claude &>/dev/null && [[ -f "$ROOT/.claude/commands/update-product-docs.md" ]]; then
+  claude --print "/update-product-docs --config $ROOT/docs-sync/config.json --no-prompt" \
+    --allowedTools "Read,Write,Edit,Bash,Grep,Glob" 2>/dev/null || true
+fi
+
+# If any docs changed, amend HEAD so they travel with the code in the same commit.
+git add -- docs/ 2>/dev/null || true
+if ! git diff --cached --quiet -- docs/; then
+  git commit --amend --no-edit --no-verify  # --no-verify prevents hook recursion
+  echo "[pre-push] auto-docs: amended HEAD with updated docs on $BRANCH."
 else
-  echo "[pre-push] auto-docs: generation skipped (non-fatal)."
+  echo "[pre-push] auto-docs: no doc changes for this push."
 fi
 
 # Always exit 0 — never block a push because of docs.

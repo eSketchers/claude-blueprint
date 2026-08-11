@@ -4,7 +4,7 @@
 
 **Goal:** Add incremental feature guide updates (Phase 3d) and OVERVIEW.md generation (Phase 3e) to the `/update-docs` command so every push keeps product-level docs current.
 
-**Architecture:** Both phases are LLM-driven additions to `.claude/commands/update-docs.md`. No new scripts are needed — the command reads the diff + commit message, infers which feature changed, and updates or creates `docs/guides/<feature>.md`. OVERVIEW.md is regenerated only on structural changes. Neither phase touches code-level details.
+**Architecture:** A new standalone command `.claude/commands/update-product-docs.md` handles all product-level doc generation. The existing `/update-docs` command is unchanged — it stays focused on code-level docs. The pre-push hook calls both commands. No new Node scripts are needed for this plan.
 
 **Tech Stack:** Markdown command spec (`.claude/commands/update-docs.md`), no Node scripts.
 

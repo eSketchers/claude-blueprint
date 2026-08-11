@@ -5,10 +5,11 @@
 #   cp hooks/pre-push.sample .git/hooks/pre-push
 #   chmod +x .git/hooks/pre-push
 #
-# Generates/refreshes documentation and commits it onto the branch being pushed,
-# so docs travel WITH the code — no separate PR, no CI workflow needed. Uses your
-# local `claude` auth (no ANTHROPIC_API_KEY secret required). Non-blocking: if doc
-# generation fails the push still goes through (the hook exits 0 either way).
+# Generates/refreshes documentation and amends HEAD to include the updated docs,
+# so docs travel WITH the code in the same commit — no separate PR, no extra
+# commit in the log. Uses your local `claude` auth (no ANTHROPIC_API_KEY secret
+# required). Non-blocking: if doc generation fails the push still goes through
+# (the hook exits 0 either way).
 
 set -uo pipefail
 
@@ -41,10 +42,8 @@ fi
 if "$ROOT/scripts/update-docs.sh" --range "$RANGE" --in-place --no-prompt 2>/dev/null; then
   # If docs changed, commit them onto the branch so they're part of this push.
   if ! git diff --cached --quiet -- docs/; then
-    git commit -m "docs: auto-update for $RANGE" \
-      -m "Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>" \
-      --no-verify  # skip hooks on the docs commit itself to prevent recursion
-    echo "[pre-push] auto-docs: committed updated docs onto $BRANCH."
+    git commit --amend --no-edit --no-verify  # fold docs into HEAD; --no-verify prevents hook recursion
+    echo "[pre-push] auto-docs: amended HEAD with updated docs on $BRANCH."
   else
     echo "[pre-push] auto-docs: no doc changes for this push."
   fi

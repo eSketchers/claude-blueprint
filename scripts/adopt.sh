@@ -838,15 +838,7 @@ case "$ACTION" in
       # copy-if-absent so re-adopt never clobbers an edited config
       if [[ ! -f "$PROJECT_ROOT/docs-sync/config.json" && -f "$BLUEPRINT_RESOLVED/docs-sync/config.example.json" ]]; then
         run "cp \"$BLUEPRINT_RESOLVED/docs-sync/config.example.json\" \"$PROJECT_ROOT/docs-sync/config.json\""
-        # Auto-patch: inject the detected branch so the config works out of the box.
-        if [[ $DRY_RUN -eq 0 ]] && command -v jq >/dev/null 2>&1; then
-          _detected_branch="$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'main')"
-          _tmp_cfg="$(mktemp)"
-          jq --arg branch "$_detected_branch" '.branches = [$branch]' \
-            "$PROJECT_ROOT/docs-sync/config.json" > "$_tmp_cfg" && \
-            mv "$_tmp_cfg" "$PROJECT_ROOT/docs-sync/config.json"
-          log "auto-docs: config.json patched with branch '$_detected_branch'."
-        fi
+        # branches: [] in config means "all branches" — no patching needed.
       fi
       # pre-push hook — generates docs with each push; append-if-exists, never clobber
       if [[ $DRY_RUN -eq 0 && -d "$PROJECT_ROOT/.git/hooks" && -f "$BLUEPRINT_RESOLVED/hooks/pre-push.sample" && ! -f "$PROJECT_ROOT/.git/hooks/pre-push" ]]; then

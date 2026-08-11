@@ -44,6 +44,7 @@ Runs only in **interactive** mode (skip entirely if `--no-prompt` is set — CI/
 ## Phase 1 — Classify
 
 1. Resolve the config (default `docs-sync/config.json`); if missing, tell the operator to `cp docs-sync/config.example.json docs-sync/config.json`, then stop.
+   Respect the `enabled` gate. For the `branches` list: an **empty array means all branches** — never skip on that basis. Only skip if the list is non-empty and the current branch is not in it.
 2. Run the deterministic collector:
    ```bash
    node scripts/collect-doc-changes.mjs --config <config> --range <A..B>

@@ -1,8 +1,9 @@
 {
-  "_comment": "Copy to docs-sync/config.json and edit. Drives scripts/collect-doc-changes.mjs, scripts/extract-symbols.mjs, and the /update-docs command. The live config.json is gitignored. adopt.sh auto-patches branches with the detected branch on first adoption.",
+  "_comment": "Copy to docs-sync/config.json and edit. Drives scripts/collect-doc-changes.mjs, scripts/extract-symbols.mjs, and the /update-docs command. The live config.json is gitignored.",
 
   "enabled": true,
-  "branches": ["main", "master"],
+  "branches": [],
+  "_branches_comment": "Empty = update docs on every branch push. Restrict to specific branches e.g. ['main', 'staging'].",
 
   "docs": {
     "_comment": "output_dir: the living-docs folder (only files here are ever edited). changelog: the append-only file.",

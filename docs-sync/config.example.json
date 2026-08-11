@@ -1,8 +1,8 @@
 {
-  "_comment": "Copy to docs-sync/config.json and edit. Drives scripts/collect-doc-changes.mjs, scripts/extract-symbols.mjs, and the /update-docs command. The live config.json is gitignored. Runs on merge to a `branches` entry and opens a draft PR — never commits to a protected branch.",
+  "_comment": "Copy to docs-sync/config.json and edit. Drives scripts/collect-doc-changes.mjs, scripts/extract-symbols.mjs, and the /update-docs command. The live config.json is gitignored. adopt.sh auto-patches branches with the detected branch on first adoption.",
 
   "enabled": true,
-  "branches": ["staging", "main"],
+  "branches": ["main", "master"],
 
   "docs": {
     "_comment": "output_dir: the living-docs folder (only files here are ever edited). changelog: the append-only file.",
@@ -53,7 +53,7 @@
     "_example": { "django-react": { "backend": ["backend/**"], "schema": ["backend/**/migrations/**"], "frontend": ["frontend/src/**"] } }
   },
 
-  "delivery": "pr",
-  "draft_prs": true,
-  "trigger": "github-actions"
+  "delivery": "pre-push",
+  "draft_prs": false,
+  "trigger": "local"
 }

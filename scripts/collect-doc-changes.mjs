@@ -57,6 +57,48 @@ export const DEFAULT_MAPPINGS = {
 
 const BUCKET_ORDER = ['schema', 'backend', 'frontend']; // precedence: schema wins over backend wins over frontend
 
+// ---------------- import extraction ----------------
+
+/**
+ * Extract import/require statements from file content.
+ * @param {string} content  file source
+ * @param {'js'|'ts'|'python'} lang
+ * @returns {Array<{name:string, from:string, local:boolean}>}
+ */
+export function extractImports(content, lang = 'js') {
+  const results = [];
+  if (lang === 'python') {
+    // `import os` and `from .models import User`
+    const re = /^(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))/gm;
+    let m;
+    while ((m = re.exec(content)) !== null) {
+      const from = (m[1] || m[2]).trim();
+      results.push({ from, local: from.startsWith('.') });
+    }
+  } else {
+    // ES import: import X from '...' / import { X } from '...' / import '...'
+    const esRe = /import\s+(?:[\w*{},\s]+\s+from\s+)?['"]([^'"]+)['"]/g;
+    let m;
+    while ((m = esRe.exec(content)) !== null) {
+      const from = m[1];
+      results.push({ from, local: from.startsWith('.') });
+    }
+    // CommonJS require()
+    const cjsRe = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+    while ((m = cjsRe.exec(content)) !== null) {
+      const from = m[1];
+      results.push({ from, local: from.startsWith('.') });
+    }
+  }
+  return results;
+}
+
+/** Read file content at HEAD for import extraction. Returns '' on error. */
+function readFileAtHead(path) {
+  try { return execFileSync('git', ['show', `HEAD:${path}`], { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }); }
+  catch { return ''; }
+}
+
 // ---------------- framework detection (port of adopt.sh detect_frameworks) ----------------
 
 /**
@@ -191,7 +233,18 @@ export function buildChangeReport({ base, head, frameworks, entries, mappings, f
   const buckets = { backend: [], schema: [], frontend: [], other: [] };
   for (const e of entries) buckets[classifyPath(e.path, mappings)].push(e);
   const empty = buckets.backend.length === 0 && buckets.schema.length === 0 && buckets.frontend.length === 0;
-  return { base, head, frameworks, buckets, facts, empty };
+
+  // Per-file import metadata (skip deleted files)
+  const fileImports = {};
+  for (const e of entries) {
+    if (e.status === 'D') continue;
+    const ext = e.path.split('.').pop() || '';
+    const lang = ['py'].includes(ext) ? 'python' : 'js';
+    const content = readFileAtHead(e.path);
+    if (content) fileImports[e.path] = extractImports(content, lang);
+  }
+
+  return { base, head, frameworks, buckets, facts, fileImports, empty };
 }
 
 // ---------------- git + range resolution ----------------

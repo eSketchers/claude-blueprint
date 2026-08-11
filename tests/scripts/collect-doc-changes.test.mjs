@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 
 import {
   detectFrameworks, globToRegExp, resolveMapping, classifyPath,
-  parseDiff, extractFacts, buildChangeReport,
+  parseDiff, extractFacts, buildChangeReport, extractImports,
 } from '../../scripts/collect-doc-changes.mjs';
 
 function fakeIO(files) {
@@ -119,4 +119,37 @@ test('buildChangeReport(): buckets + empty flag', () => {
   const nonEmpty = buildChangeReport({ base: 'a', head: 'b', frameworks: [], entries: [{ status: 'M', path: 'src/x.ts' }], mappings: m, facts: {} });
   assert.equal(nonEmpty.empty, false);
   assert.equal(nonEmpty.buckets.backend.length, 1);
+});
+
+test('extractImports(): JS/TS named imports', () => {
+  const content = `import { Board, Square } from './components/Board';\nimport React from 'react';`;
+  const result = extractImports(content, 'js');
+  assert.ok(result.some((i) => i.from === './components/Board' && i.local === true));
+  assert.ok(result.some((i) => i.from === 'react' && i.local === false));
+});
+
+test('extractImports(): require() calls', () => {
+  const content = `const path = require('node:path');\nconst utils = require('../utils/gameLogic');`;
+  const result = extractImports(content, 'js');
+  assert.ok(result.some((i) => i.from === 'node:path' && i.local === false));
+  assert.ok(result.some((i) => i.from === '../utils/gameLogic' && i.local === true));
+});
+
+test('extractImports(): Python imports', () => {
+  const content = `import os\nfrom .models import User\nfrom django.db import models`;
+  const result = extractImports(content, 'python');
+  assert.ok(result.some((i) => i.from === 'os' && i.local === false));
+  assert.ok(result.some((i) => i.from === '.models' && i.local === true));
+});
+
+test('extractImports(): empty content returns empty array', () => {
+  assert.deepEqual(extractImports('', 'js'), []);
+});
+
+test('buildChangeReport(): includes fileImports for non-deleted entries', () => {
+  const m = resolveMapping([{ framework: 'react', root: '' }]);
+  const entries = [{ status: 'M', path: 'src/App.jsx' }, { status: 'D', path: 'src/old.jsx' }];
+  const report = buildChangeReport({ base: 'a', head: 'b', frameworks: [], entries, mappings: m, facts: {} });
+  assert.ok('fileImports' in report);
+  assert.ok(!('src/old.jsx' in report.fileImports)); // deleted files excluded
 });

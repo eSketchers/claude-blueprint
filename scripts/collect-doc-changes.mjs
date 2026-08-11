@@ -93,9 +93,9 @@ export function extractImports(content, lang = 'js') {
   return results;
 }
 
-/** Read file content at HEAD for import extraction. Returns '' on error. */
-function readFileAtHead(path) {
-  try { return execFileSync('git', ['show', `HEAD:${path}`], { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }); }
+/** Read file content at a given ref for import extraction. Returns '' on error. */
+function readFileAtHead(path, ref = 'HEAD') {
+  try { return execFileSync('git', ['show', `${ref}:${path}`], { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }); }
   catch { return ''; }
 }
 
@@ -240,7 +240,7 @@ export function buildChangeReport({ base, head, frameworks, entries, mappings, f
     if (e.status === 'D') continue;
     const ext = e.path.split('.').pop() || '';
     const lang = ['py'].includes(ext) ? 'python' : 'js';
-    const content = readFileAtHead(e.path);
+    const content = readFileAtHead(e.path, head);
     if (content) fileImports[e.path] = extractImports(content, lang);
   }
 

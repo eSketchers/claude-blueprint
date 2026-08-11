@@ -16,6 +16,23 @@ test('symbolPatterns(): python includes def + class', () => {
   assert.ok(p.some((x) => x.lang === 'python' && x.kind === 'class'));
 });
 
+test('symbolPatterns(): react includes tsx/jsx component patterns', () => {
+  const p = symbolPatterns('react');
+  assert.ok(p.some((x) => x.lang === 'tsx' && x.kind === 'component'));
+  assert.ok(p.some((x) => x.lang === 'jsx' && x.kind === 'component'));
+  assert.ok(p.some((x) => x.pattern.includes('export default function')));
+});
+
+test('symbolPatterns(): nextjs includes tsx patterns', () => {
+  const p = symbolPatterns('nextjs');
+  assert.ok(p.some((x) => x.lang === 'tsx'));
+});
+
+test('symbolPatterns(): node does not include tsx patterns', () => {
+  const p = symbolPatterns('node');
+  assert.ok(!p.some((x) => x.lang === 'tsx'));
+});
+
 test('parseAstGrepJson(): uses metaVariables NAME + first-line signature', () => {
   const fixture = [{
     file: 'src/orders.ts',

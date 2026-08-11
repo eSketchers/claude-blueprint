@@ -25,7 +25,7 @@ test('detectFrameworks(): single Next.js repo at root', () => {
   assert.deepEqual(fw, [{ framework: 'nextjs', root: '' }]);
 });
 
-test('detectFrameworks(): django-react monorepo (python backend + node frontend)', () => {
+test('detectFrameworks(): django-react monorepo (python backend + react frontend)', () => {
   const present = new Set(['/r/backend', '/r/backend/manage.py', '/r/frontend', '/r/frontend/package.json']);
   const io = {
     exists: (p) => present.has(p),
@@ -33,7 +33,25 @@ test('detectFrameworks(): django-react monorepo (python backend + node frontend)
   };
   const fw = detectFrameworks('/r', io);
   assert.ok(fw.some((f) => f.framework === 'python' && f.root === 'backend'));
-  assert.ok(fw.some((f) => f.framework === 'node' && f.root === 'frontend'));
+  assert.ok(fw.some((f) => f.framework === 'react' && f.root === 'frontend'));
+});
+
+test('detectFrameworks(): react SPA at root → react framework (not node)', () => {
+  const io = { exists: (p) => p === '/r/package.json', readFile: () => '{"dependencies":{"react":"18","react-dom":"18"}}' };
+  const fw = detectFrameworks('/r', io);
+  assert.deepEqual(fw, [{ framework: 'react', root: '' }]);
+});
+
+test('detectFrameworks(): vue SPA at root → react framework type', () => {
+  const io = { exists: (p) => p === '/r/package.json', readFile: () => '{"dependencies":{"vue":"3"}}' };
+  const fw = detectFrameworks('/r', io);
+  assert.deepEqual(fw, [{ framework: 'react', root: '' }]);
+});
+
+test('detectFrameworks(): plain node (no SPA deps) → node framework', () => {
+  const io = { exists: (p) => p === '/r/package.json', readFile: () => '{"dependencies":{"express":"4"}}' };
+  const fw = detectFrameworks('/r', io);
+  assert.deepEqual(fw, [{ framework: 'node', root: '' }]);
 });
 
 test('detectFrameworks(): none', () => {
@@ -52,6 +70,14 @@ test('classifyPath(): schema > backend > frontend precedence', () => {
   const m = resolveMapping([{ framework: 'nestjs', root: '' }]);
   assert.equal(classifyPath('src/users/migrations/0001.ts', m), 'schema'); // migration under src -> schema, not backend
   assert.equal(classifyPath('src/users/users.service.ts', m), 'backend');
+  assert.equal(classifyPath('README.md', m), 'other');
+});
+
+test('classifyPath(): react SPA — src files go to frontend, not backend', () => {
+  const m = resolveMapping([{ framework: 'react', root: '' }]);
+  assert.equal(classifyPath('src/App.tsx', m), 'frontend');
+  assert.equal(classifyPath('src/components/Board.jsx', m), 'frontend');
+  assert.equal(classifyPath('public/index.html', m), 'frontend');
   assert.equal(classifyPath('README.md', m), 'other');
 });
 

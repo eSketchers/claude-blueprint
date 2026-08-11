@@ -32,6 +32,12 @@ export const DEFAULT_MAPPINGS = {
     schema: ['prisma/schema.prisma', 'prisma/migrations/**', 'migrations/**', 'db/migrations/**', '**/drizzle/**'],
     frontend: [],
   },
+  // React / Vue / Svelte / Angular SPAs — all source is frontend; no backend surface.
+  react: {
+    backend: [],
+    schema: [],
+    frontend: ['src/**', 'public/**', 'components/**', 'pages/**', 'app/**', 'lib/**'],
+  },
   nextjs: {
     backend: ['app/api/**', 'pages/api/**'],
     schema: ['prisma/schema.prisma', 'prisma/migrations/**'],
@@ -75,6 +81,7 @@ export function detectFrameworks(root, io) {
       const pkg = j('package.json');
       if (pkgHas(pkg, 'next')) add('nextjs', rel);
       else if (pkgHas(pkg, '@nestjs/core')) add('nestjs', rel);
+      else if (pkgHas(pkg, 'react') || pkgHas(pkg, 'vue') || pkgHas(pkg, '@angular/core') || pkgHas(pkg, 'svelte') || pkgHas(pkg, 'solid-js')) add('react', rel);
       else add('node', rel);
     }
   };

@@ -42,7 +42,7 @@
     "_comment_2": "max_new_per_run caps LLM cost on the first (backfill) pass so it can span several PRs. include/exclude are globs; tests/vendor/node_modules/migrations are excluded by default.",
     "enabled": true,
     "output_dir": "docs/reference",
-    "languages": ["ts", "js", "python"],
+    "languages": ["ts", "tsx", "jsx", "js", "python"],
     "include": [],
     "exclude": [],
     "max_new_per_run": 40

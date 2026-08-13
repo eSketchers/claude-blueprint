@@ -1,5 +1,5 @@
 ---
-description: Generate and maintain product-level documentation — feature guides, system overview, and what's new — for customer support, product owners, and new team members. Publishes to Mintlify via docs/guides/, docs/OVERVIEW.md, and docs/WHATS-NEW.md.
+description: Generate and maintain product-level documentation — feature guides, system overview, and what's new — for customer support, product owners, and new team members. Publishes via docs/guides/, docs/OVERVIEW.md, docs/WHATS-NEW.md, and Docsify deployment files (index.html, README.md, _sidebar.md).
 argument-hint: [--bootstrap] [--config <path>] [--no-prompt]
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
@@ -26,11 +26,17 @@ Arguments: `$ARGUMENTS`
 
 1. Read config (`docs-sync/config.json`). If missing, tell the operator to `cp docs-sync/config.example.json docs-sync/config.json` and stop.
 2. Check if `docs/guides/` exists and contains any `.md` files.
-3. **Run bootstrap (Phase 2b) if any of these are true:**
+3. **If `docs/` exists and contains files, and `--bootstrap` was NOT passed, and NOT `--no-prompt`:**
+   - Ask the operator: "A `docs/` folder already exists. Do you have existing documentation you want to preserve? (yes/no)"
+   - If **yes**: run incremental update (Phase 2a) — do not overwrite existing guides.
+   - If **no**: run bootstrap (Phase 2b) — regenerate everything from scratch.
+4. **Run bootstrap (Phase 2b) automatically (no prompt) if any of these are true:**
    - `--bootstrap` flag is passed
    - `docs/guides/` is empty or does not exist
    - `docs/OVERVIEW.md` does not exist
-4. Otherwise run incremental update (Phase 2a).
+   - `--no-prompt` is passed and `docs/guides/` is empty
+5. **Run incremental update (Phase 2a) automatically (no prompt) if:**
+   - `--no-prompt` is passed and `docs/guides/` already has `.md` files
 
 ## Phase 2a — Incremental feature guide update
 
@@ -199,6 +205,81 @@ node scripts/generate-mint-json.mjs --config <config>
 
 **Otherwise**, write `docs/mint.json` directly from the scan above.
 
+## Phase 5b — Docsify deployment files
+
+Generate the three files needed to serve docs via Docsify on Netlify (or any static host). These work for **any git host** — GitHub, GitLab, or Bitbucket.
+
+**Always generate or update these files** — they are idempotent and safe to regenerate on every run.
+
+### `docs/index.html`
+
+Write exactly this file (replace `<project_name>` with the project directory name or `config.mintlify.project_name` if set):
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title><project_name> Docs</title>
+    <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify-themeable@0/dist/css/theme-simple.css">
+  </head>
+  <body>
+    <div id="app"></div>
+    <script>
+      window.$docsify = {
+        name: '<project_name>',
+        loadSidebar: true,
+        subMaxLevel: 2,
+        search: 'auto'
+      }
+    </script>
+    <script src="//cdn.jsdelivr.net/npm/docsify/lib/docsify.min.js"></script>
+    <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
+  </body>
+</html>
+```
+
+### `docs/README.md`
+
+Write only if `docs/README.md` does not already exist:
+
+```markdown
+# Welcome
+
+Select a topic from the sidebar to get started.
+```
+
+### `docs/_sidebar.md`
+
+Always regenerate from the current `docs/` structure:
+
+```markdown
+- [What's New](WHATS-NEW.md)
+- [Overview](OVERVIEW.md)
+- **Guides**
+  - [<Feature Name>](guides/<feature>.md)
+  - ... (one line per guide file in docs/guides/)
+```
+
+**Rules:**
+- Omit "What's New" line if `docs/WHATS-NEW.md` does not exist
+- Omit "Overview" line if `docs/OVERVIEW.md` does not exist
+- Omit "Guides" section if `docs/guides/` is empty
+- Feature name in the sidebar link is the guide's `# Title` heading, not the filename
+- Never include code-level docs (ARCHITECTURE.md, CHANGELOG.md) in the sidebar
+
+**Netlify deployment instructions** — print once after generating these files (interactive mode only):
+
+```
+Netlify deployment (works with GitHub, GitLab, and Bitbucket):
+1. Go to netlify.com → Add new site → Import an existing project
+2. Connect your git provider and select this repo
+3. Set Publish directory: docs
+4. Leave Build command empty
+5. Click Deploy
+```
+
 ## Phase 6 — Deliver
 
 **Pre-push hook (`--no-prompt`):** all generated files are already on disk — the hook's `git add docs/` and `git commit --amend --no-edit` picks them up alongside the code-level docs from `/update-docs`.
@@ -209,6 +290,9 @@ node scripts/generate-mint-json.mjs --config <config>
 - OVERVIEW.md: regenerated | skipped
 - WHATS-NEW.md: entry appended | skipped
 - mint.json: regenerated | skipped
+- index.html: written | skipped
+- _sidebar.md: regenerated | skipped
+- README.md: written | already existed
 
 ## Failure modes — fail loud, never block
 
@@ -216,4 +300,5 @@ node scripts/generate-mint-json.mjs --config <config>
 - OVERVIEW.md generation fails → warn, skip, continue
 - WHATS-NEW.md write fails → warn, skip, continue
 - mint.json generation fails → warn, skip, continue
+- index.html / _sidebar.md / README.md write fails → warn, skip, continue
 - Config missing → stop and tell the operator

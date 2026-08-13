@@ -39,6 +39,32 @@ Arguments: `$ARGUMENTS`
 5. **Run incremental automatically (no prompt) if:**
    - `--no-prompt` is passed and `docs/guides/` already has `.md` files
 
+### 1b — Collect external doc links (interactive mode only)
+
+Skip this section entirely if `--no-prompt` is passed — use `config.external_docs.urls` directly.
+
+**Check config for existing links:**
+- Read `external_docs.urls` from `docs-sync/config.json`
+- If the array is empty or missing, ask the operator:
+
+  > "Do you have any external docs to include? Paste a comma-separated list of URLs (Google Docs, Notion, Confluence, etc.) or press Enter to skip:"
+
+- If the operator provides URLs:
+  - Parse the comma-separated list, trim whitespace from each URL
+  - Save them back to `docs-sync/config.json` under `external_docs.urls` — so future runs skip this prompt
+  - Print: "Saved N link(s) to docs-sync/config.json. You won't be asked again unless you clear them."
+
+- If URLs already exist in config, ask:
+
+  > "Found N external doc link(s) in config. Use these, replace them, or skip? (use/replace/skip)"
+  - **use** → proceed with existing URLs
+  - **replace** → ask for a new comma-separated list, overwrite `external_docs.urls` in config
+  - **skip** → ignore external docs for this run only
+
+**In `--no-prompt` mode:** read `external_docs.urls` from config silently and proceed.
+
+**After collecting URLs:** fetch each URL's content and incorporate it into Step 2 as additional context when generating or updating feature guides. Treat the external doc content as product-level input — do not copy it verbatim, use it to understand what the feature does from a business perspective.
+
 ---
 
 ## Step 2 — Prepare the docs

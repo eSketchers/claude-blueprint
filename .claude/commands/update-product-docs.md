@@ -22,44 +22,61 @@ Arguments: `$ARGUMENTS`
 - **Idempotent** — re-running on the same diff produces the same output.
 - **Non-fatal** — never block a push. If a guide fails to generate, warn and continue.
 
-## Phase 1 — Bootstrap check
+---
+
+## Step 1 — Check existing docs
 
 1. Read config (`docs-sync/config.json`). If missing, tell the operator to `cp docs-sync/config.example.json docs-sync/config.json` and stop.
 2. Check if `docs/guides/` exists and contains any `.md` files.
-3. **If `docs/` exists and contains files, and `--bootstrap` was NOT passed, and NOT `--no-prompt`:**
-   - Ask the operator: "A `docs/` folder already exists. Do you have existing documentation you want to preserve? (yes/no)"
-   - If **yes**: run incremental update (Phase 2a) — do not overwrite existing guides.
-   - If **no**: run bootstrap (Phase 2b) — regenerate everything from scratch.
-4. **Run bootstrap (Phase 2b) automatically (no prompt) if any of these are true:**
+3. **If `docs/` exists and has content, and `--bootstrap` was NOT passed, and NOT `--no-prompt`:**
+   - Ask the operator: "A `docs/` folder already exists. Do you want to preserve the existing docs and do an incremental update, or regenerate everything from scratch? (preserve/regenerate)"
+   - **preserve** → run incremental update (Step 2, incremental mode)
+   - **regenerate** → run full bootstrap (Step 2, bootstrap mode)
+4. **Run bootstrap automatically (no prompt) if any of these are true:**
    - `--bootstrap` flag is passed
    - `docs/guides/` is empty or does not exist
    - `docs/OVERVIEW.md` does not exist
-   - `--no-prompt` is passed and `docs/guides/` is empty
-5. **Run incremental update (Phase 2a) automatically (no prompt) if:**
+5. **Run incremental automatically (no prompt) if:**
    - `--no-prompt` is passed and `docs/guides/` already has `.md` files
 
-## Phase 2a — Incremental feature guide update
+---
 
-Runs on every push when guides already exist.
+## Step 2 — Prepare the docs
 
-1. **Infer affected feature(s):** Read the git diff summary and commit message (`git log -1 --pretty=%B` + `git diff --stat HEAD~1..HEAD`). Identify which user-facing feature(s) the change belongs to.
+### 2a — Understand the project structure
 
-2. **Skip entirely** if the commit message prefix is one of: `docs:`, `chore:`, `style:`, `test:`, `ci:` — these don't affect product behavior.
+Before writing any docs, map the project:
 
-3. **For each affected feature:**
+1. **Identify all frontends and backends:**
+   - Look for multiple `package.json`, `requirements.txt`, `pyproject.toml`, or `Dockerfile` files across subdirectories
+   - Common patterns: `frontend/`, `backend/`, `api/`, `web/`, `mobile/`, `admin/`, `client/`, `server/`
+   - Each distinct app is a separate component — note its name and purpose
 
-   **a. Existing guide** (`docs/guides/<feature>.md` exists):
-   - Read the current guide
-   - Rewrite only the sections affected by this change
-   - Keep unchanged sections verbatim
-   - Update the `> last updated YYYY-MM-DD` byline to today's date
+2. **Identify how components connect:**
+   - Look for API base URLs, environment variables, proxy configs, or service references that link one component to another
+   - Write a plain-language connection map: "The mobile app talks to the API server. The admin panel also uses the same API. The API server stores data in the database."
 
-   **b. New feature** (no guide exists):
-   - Read the relevant changed files to understand the feature end-to-end
-   - Create `docs/guides/<feature>.md` (see format below)
-   - Use a clear user-facing name: `password-reset.md`, not `auth-reset-handler.md`
+3. **Identify user-facing features per component:**
+   - Think in terms of what a user does, not what the code does
+   - Examples: "Login", "Checkout", "Password Reset", "Push Notifications", "Admin Dashboard"
+   - Group features by which component(s) they touch
 
-4. **Feature guide format** (enforced for every write):
+### 2b — Generate or update guides
+
+**Incremental mode** (existing docs preserved):
+1. Read the git diff summary and commit message (`git log -1 --pretty=%B` + `git diff --stat HEAD~1..HEAD`)
+2. Skip entirely if the commit prefix is `docs:`, `chore:`, `style:`, `test:`, or `ci:`
+3. Identify which feature(s) the change affects
+4. For each affected feature:
+   - **Existing guide** → rewrite only the changed sections, keep the rest verbatim, update the `> last updated YYYY-MM-DD` byline
+   - **New feature** → create `docs/guides/<feature>.md` using the format below
+
+**Bootstrap mode** (full generation):
+1. For each user-facing feature identified in Step 2a: read the relevant source files end-to-end
+2. Write `docs/guides/<feature>.md` for each feature using the format below
+3. Use clear user-facing names: `password-reset.md`, not `auth-reset-handler.md`
+
+**Feature guide format** (enforced for every write):
 
 ```markdown
 # <Feature Name>
@@ -77,30 +94,9 @@ Write as if explaining to a customer support agent.>
 Omit this section entirely if there is nothing notable.>
 ```
 
-## Phase 2b — Bootstrap (first run)
+**Generate or regenerate `docs/OVERVIEW.md`:**
 
-Runs when `--bootstrap` is passed or `docs/guides/` is empty.
-
-1. Read the project structure: `package.json` (or `requirements.txt`), entry files, top-level directories.
-2. Identify user-facing features — not technical modules. Think in terms of what a user does: "Login", "Checkout", "Password Reset", "User Profile", "Notifications".
-3. For each feature: read the relevant source files to understand the flow end-to-end.
-4. Write `docs/guides/<feature>.md` for each feature using the format in Phase 2a.
-5. After all guides are written, continue to Phase 3.
-
-## Phase 3 — OVERVIEW.md
-
-Generate or regenerate `docs/OVERVIEW.md` — a plain-language system overview.
-
-**Regenerate only if any of these are true:**
-- `docs/OVERVIEW.md` does not exist
-- `package.json`, `pyproject.toml`, or `requirements.txt` changed in the diff
-- A new top-level directory appeared in the diff
-- A new `docs/guides/*.md` was created in this run (new feature = structural change)
-- `--bootstrap` was passed
-
-**Otherwise skip** — do not regenerate on routine pushes.
-
-**Content of OVERVIEW.md:**
+Regenerate if: does not exist, `--bootstrap` passed, `package.json`/`pyproject.toml`/`requirements.txt` changed, new top-level directory appeared, or a new guide was created in this run. Otherwise skip.
 
 ```markdown
 # System Overview
@@ -109,32 +105,25 @@ Generate or regenerate `docs/OVERVIEW.md` — a plain-language system overview.
 ## What this product does
 <One paragraph: purpose, who uses it, the problem it solves. No technical terms.>
 
-## Main components
-| Component | What it does |
-|-----------|-------------|
-| <Name> | <Plain-language description for a product owner> |
+## Components and how they connect
+| Component | What it does | Who uses it |
+|-----------|-------------|-------------|
+| <Name> | <Plain-language description> | <Users / Admins / Mobile app / etc.> |
 
-(List conceptual components — "Authentication", "Checkout", "Notifications" — not files or modules. Max 10 rows.)
+<2-4 sentences describing how the components talk to each other, from a product owner's perspective.>
 
 ## How data flows
-<2-4 sentences: how a user action moves through the system to produce a result.
-Written for a product owner. No technical terms.>
+<2-4 sentences: how a user action moves through the system to produce a result. No technical terms.>
 
 ## Tech stack
 | Layer | Technology |
 |-------|-----------|
 | <layer> | <technology> |
-
-(Read from package.json or requirements.txt. Use layer names: Frontend, Backend, Database, etc. Omit section if neither file exists.)
 ```
 
-## Phase 4 — WHATS-NEW.md
+**Append to `docs/WHATS-NEW.md`:**
 
-Append one plain-language entry to `docs/WHATS-NEW.md`.
-
-**Trigger:** Runs on every push, same as Phase 2a. Skip if the commit is `docs:`, `chore:`, `style:`, `test:`, or `ci:`.
-
-**Format:**
+Skip if commit prefix is `docs:`, `chore:`, `style:`, `test:`, or `ci:`. Dedupe if the latest entry already covers these changes. Create the file with a `# What's New` header if it does not exist.
 
 ```markdown
 ## <Month YYYY>
@@ -142,78 +131,78 @@ Append one plain-language entry to `docs/WHATS-NEW.md`.
 - Fixed: <what was broken and how it works now>
 ```
 
-**Rules:**
-- No code references — no file names, no function names
-- "Checkout now supports PayPal", not "Added PayPal handler to PaymentSelector.jsx"
-- Append only — never rewrite existing entries
-- Dedupe: if the latest entry already covers these same changes, skip
-- Create the file with this header if it does not exist:
+---
 
-```markdown
-# What's New
+## Step 3 — Verify active feature coverage
 
-```
+After all guides are written or updated, verify completeness and relevance:
+
+1. **Identify active features:**
+   - Scan routes, endpoints, nav menus, and entry points across all components
+   - A feature is **active** if it has live routes/endpoints and is reachable by a user
+   - A feature is **inactive** if: it is behind a disabled feature flag, all its routes are commented out, it has no UI entry point, or it is clearly marked as deprecated/WIP in the code
+
+2. **For each active feature:** confirm a guide exists in `docs/guides/`. If a guide is missing, create it now (Step 2 format).
+
+3. **For each inactive feature:** if a guide exists for it, add a notice at the top of the guide:
+   ```markdown
+   > **Note:** This feature is currently inactive and not available to users.
+   ```
+   Do not delete the guide — it may become active again.
+
+4. **Skip features that are:** internal admin tools not visible to end users, developer-only endpoints, health check or monitoring routes.
+
+---
+
+## Step 4 — Remove duplications
+
+After all guides are finalized, scan for overlapping content:
+
+1. **Read all guides in `docs/guides/`**
+
+2. **Identify duplications:**
+   - Two guides that describe the same feature under different names → merge into one, delete the other, update `_sidebar.md`
+   - A section in one guide that repeats content from another → remove the duplicate section and add a one-line cross-reference: "For details on X, see the [Feature Name] guide."
+   - An OVERVIEW.md section that copies a guide verbatim → replace with a one-sentence summary and a link to the guide
+
+3. **Do not merge guides that describe related but distinct features** — only merge when they cover the exact same user-facing capability.
+
+4. **After merging:** update `docs/_sidebar.md` to reflect any removed or renamed guides.
+
+---
 
 ## Phase 5 — mint.json
 
-Always generate or update `docs/mint.json` — this is what Mintlify reads to build the site.
+Always generate or update `docs/mint.json`.
 
 **Full regeneration when any of these are true:**
 - `docs/mint.json` does not exist
 - `--bootstrap` was passed
 - A guide was added, renamed, or deleted in this run
 
-**Partial update (navigation only) otherwise** — rebuild the `navigation` array from the current `docs/guides/` contents, keep all other `mint.json` fields (colors, name, etc.) unchanged.
-
-**Generate by scanning `docs/` structure:**
+**Partial update (navigation only) otherwise.**
 
 ```json
 {
-  "name": "<project_name from config.mintlify.project_name, or directory name>",
+  "name": "<project_name from config or directory name>",
   "navigation": [
-    {
-      "group": "What's New",
-      "pages": ["WHATS-NEW"]
-    },
-    {
-      "group": "Product Guides",
-      "pages": ["guides/<feature1>", "guides/<feature2>", ...]
-    },
-    {
-      "group": "System Overview",
-      "pages": ["OVERVIEW"]
-    }
+    { "group": "What's New", "pages": ["WHATS-NEW"] },
+    { "group": "Product Guides", "pages": ["guides/<feature1>", "guides/<feature2>"] },
+    { "group": "System Overview", "pages": ["OVERVIEW"] }
   ],
-  "colors": {
-    "primary": "#0D9373"
-  }
+  "colors": { "primary": "#0D9373" }
 }
 ```
 
-**Rules:**
-- Only include pages that actually exist in `docs/`
-- Omit "What's New" group if `docs/WHATS-NEW.md` does not exist
-- Omit "Product Guides" group if `docs/guides/` is empty
-- Omit "System Overview" group if `docs/OVERVIEW.md` does not exist
-- Page paths are relative to `docs/` and have no `.md` extension: `"guides/checkout"` not `"guides/checkout.md"`
-- Never include code-level docs (`src/`, `backend.md`, `frontend.md`, `ARCHITECTURE.md`, `CHANGELOG.md`) in navigation
+Rules: only include pages that exist, omit empty groups, no `.md` extension in paths, never include ARCHITECTURE.md or CHANGELOG.md.
 
-**If `scripts/generate-mint-json.mjs` exists**, use it:
-```bash
-node scripts/generate-mint-json.mjs --config <config>
-```
-
-**Otherwise**, write `docs/mint.json` directly from the scan above.
+---
 
 ## Phase 5b — Docsify deployment files
 
-Generate the three files needed to serve docs via Docsify on Netlify (or any static host). These work for **any git host** — GitHub, GitLab, or Bitbucket.
-
-**Always generate or update these files** — they are idempotent and safe to regenerate on every run.
+Generate three files for Netlify/static hosting. Works for GitHub, GitLab, and Bitbucket.
 
 ### `docs/index.html`
-
-Write exactly this file (replace `<project_name>` with the project directory name or `config.mintlify.project_name` if set):
 
 ```html
 <!DOCTYPE html>
@@ -242,7 +231,7 @@ Write exactly this file (replace `<project_name>` with the project directory nam
 
 ### `docs/README.md`
 
-Write only if `docs/README.md` does not already exist:
+Write only if it does not already exist:
 
 ```markdown
 # Welcome
@@ -252,24 +241,18 @@ Select a topic from the sidebar to get started.
 
 ### `docs/_sidebar.md`
 
-Always regenerate from the current `docs/` structure:
+Always regenerate from current `docs/` structure:
 
 ```markdown
 - [What's New](WHATS-NEW.md)
 - [Overview](OVERVIEW.md)
 - **Guides**
   - [<Feature Name>](guides/<feature>.md)
-  - ... (one line per guide file in docs/guides/)
 ```
 
-**Rules:**
-- Omit "What's New" line if `docs/WHATS-NEW.md` does not exist
-- Omit "Overview" line if `docs/OVERVIEW.md` does not exist
-- Omit "Guides" section if `docs/guides/` is empty
-- Feature name in the sidebar link is the guide's `# Title` heading, not the filename
-- Never include code-level docs (ARCHITECTURE.md, CHANGELOG.md) in the sidebar
+Rules: omit sections for files that don't exist, use the guide's `# Title` heading not the filename, never include ARCHITECTURE.md or CHANGELOG.md.
 
-**Netlify deployment instructions** — print once after generating these files (interactive mode only):
+**Print once in interactive mode after generating:**
 
 ```
 Netlify deployment (works with GitHub, GitLab, and Bitbucket):
@@ -280,19 +263,25 @@ Netlify deployment (works with GitHub, GitLab, and Bitbucket):
 5. Click Deploy
 ```
 
+---
+
 ## Phase 6 — Deliver
 
-**Pre-push hook (`--no-prompt`):** all generated files are already on disk — the hook's `git add docs/` and `git commit --amend --no-edit` picks them up alongside the code-level docs from `/update-docs`.
+**Pre-push hook (`--no-prompt`):** all generated files are already on disk — the hook's `git add docs/` and `git commit --amend --no-edit` picks them up.
 
 **Interactive:** print a summary:
 - Feature guides updated: N
 - Feature guides created: N
+- Inactive features flagged: N
+- Duplicate sections removed: N
 - OVERVIEW.md: regenerated | skipped
 - WHATS-NEW.md: entry appended | skipped
 - mint.json: regenerated | skipped
 - index.html: written | skipped
 - _sidebar.md: regenerated | skipped
 - README.md: written | already existed
+
+---
 
 ## Failure modes — fail loud, never block
 
@@ -301,4 +290,6 @@ Netlify deployment (works with GitHub, GitLab, and Bitbucket):
 - WHATS-NEW.md write fails → warn, skip, continue
 - mint.json generation fails → warn, skip, continue
 - index.html / _sidebar.md / README.md write fails → warn, skip, continue
+- Step 3 verification fails → warn, skip, continue
+- Step 4 deduplication fails → warn, skip, continue
 - Config missing → stop and tell the operator

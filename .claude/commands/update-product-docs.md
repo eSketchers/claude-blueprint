@@ -124,6 +124,8 @@ Omit this section entirely if there is nothing notable.>
 
 Regenerate if: does not exist, `--bootstrap` passed, `package.json`/`pyproject.toml`/`requirements.txt` changed, new top-level directory appeared, or a new guide was created in this run. Otherwise skip.
 
+**Never include tech stack, framework names, library names, or any implementation technology** — OVERVIEW.md is for product owners, not developers.
+
 ```markdown
 # System Overview
 > last updated <YYYY-MM-DD>
@@ -140,11 +142,6 @@ Regenerate if: does not exist, `--bootstrap` passed, `package.json`/`pyproject.t
 
 ## How data flows
 <2-4 sentences: how a user action moves through the system to produce a result. No technical terms.>
-
-## Tech stack
-| Layer | Technology |
-|-------|-----------|
-| <layer> | <technology> |
 ```
 
 **Append to `docs/WHATS-NEW.md`:**

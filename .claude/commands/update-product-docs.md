@@ -39,31 +39,21 @@ Arguments: `$ARGUMENTS`
 5. **Run incremental automatically (no prompt) if:**
    - `--no-prompt` is passed and `docs/guides/` already has `.md` files
 
-### 1b — Collect external doc links (interactive mode only)
+### 1b — Collect external doc links (bootstrap mode only)
 
-Skip this section entirely if `--no-prompt` is passed — use `config.external_docs.urls` directly.
+Skip this section entirely if running in incremental mode or `--no-prompt` is passed.
 
-**Check config for existing links:**
-- Read `external_docs.urls` from `docs-sync/config.json`
-- If the array is empty or missing, ask the operator:
+**Only ask during bootstrap** — external docs are for seeding, not for incremental updates.
 
-  > "Do you have any external docs to include? Paste a comma-separated list of URLs (Google Docs, Notion, Confluence, etc.) or press Enter to skip:"
+Ask the operator:
 
-- If the operator provides URLs:
-  - Parse the comma-separated list, trim whitespace from each URL
-  - Save them back to `docs-sync/config.json` under `external_docs.urls` — so future runs skip this prompt
-  - Print: "Saved N link(s) to docs-sync/config.json. You won't be asked again unless you clear them."
+> "Do you have any external docs to help seed the guides? Paste a comma-separated list of URLs (Google Docs, Notion, Confluence, etc.) or press Enter to skip:"
 
-- If URLs already exist in config, ask:
-
-  > "Found N external doc link(s) in config. Use these, replace them, or skip? (use/replace/skip)"
-  - **use** → proceed with existing URLs
-  - **replace** → ask for a new comma-separated list, overwrite `external_docs.urls` in config
-  - **skip** → ignore external docs for this run only
-
-**In `--no-prompt` mode:** read `external_docs.urls` from config silently and proceed.
-
-**After collecting URLs:** fetch each URL's content and incorporate it into Step 2 as additional context when generating or updating feature guides. Treat the external doc content as product-level input — do not copy it verbatim, use it to understand what the feature does from a business perspective.
+- Parse the comma-separated list, trim whitespace from each URL
+- Do NOT save URLs to config — they are one-time seeding input only
+- Use the fetched content as additional context in Step 2 when generating feature guides
+- Treat external doc content as product-level input — do not copy it verbatim, use it to understand what features do from a business perspective
+- If the operator presses Enter with no input, skip external docs entirely
 
 ---
 

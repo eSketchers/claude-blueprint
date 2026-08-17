@@ -32,6 +32,12 @@ export const DEFAULT_MAPPINGS = {
     schema: ['prisma/schema.prisma', 'prisma/migrations/**', 'migrations/**', 'db/migrations/**', '**/drizzle/**'],
     frontend: [],
   },
+  // React / Vue / Svelte / Angular SPAs — all source is frontend; no backend surface.
+  react: {
+    backend: [],
+    schema: [],
+    frontend: ['src/**', 'public/**', 'components/**', 'pages/**', 'app/**', 'lib/**'],
+  },
   nextjs: {
     backend: ['app/api/**', 'pages/api/**'],
     schema: ['prisma/schema.prisma', 'prisma/migrations/**'],
@@ -50,6 +56,48 @@ export const DEFAULT_MAPPINGS = {
 };
 
 const BUCKET_ORDER = ['schema', 'backend', 'frontend']; // precedence: schema wins over backend wins over frontend
+
+// ---------------- import extraction ----------------
+
+/**
+ * Extract import/require statements from file content.
+ * @param {string} content  file source
+ * @param {'js'|'ts'|'python'} lang
+ * @returns {Array<{name:string, from:string, local:boolean}>}
+ */
+export function extractImports(content, lang = 'js') {
+  const results = [];
+  if (lang === 'python') {
+    // `import os` and `from .models import User`
+    const re = /^(?:from\s+([\w.]+)\s+import|import\s+([\w.]+))/gm;
+    let m;
+    while ((m = re.exec(content)) !== null) {
+      const from = (m[1] || m[2]).trim();
+      results.push({ from, local: from.startsWith('.') });
+    }
+  } else {
+    // ES import: import X from '...' / import { X } from '...' / import '...'
+    const esRe = /import\s+(?:[\w*{},\s]+\s+from\s+)?['"]([^'"]+)['"]/g;
+    let m;
+    while ((m = esRe.exec(content)) !== null) {
+      const from = m[1];
+      results.push({ from, local: from.startsWith('.') });
+    }
+    // CommonJS require()
+    const cjsRe = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+    while ((m = cjsRe.exec(content)) !== null) {
+      const from = m[1];
+      results.push({ from, local: from.startsWith('.') });
+    }
+  }
+  return results;
+}
+
+/** Read file content at a given ref for import extraction. Returns '' on error. */
+function readFileAtHead(path, ref = 'HEAD') {
+  try { return execFileSync('git', ['show', `${ref}:${path}`], { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }); }
+  catch { return ''; }
+}
 
 // ---------------- framework detection (port of adopt.sh detect_frameworks) ----------------
 
@@ -75,6 +123,7 @@ export function detectFrameworks(root, io) {
       const pkg = j('package.json');
       if (pkgHas(pkg, 'next')) add('nextjs', rel);
       else if (pkgHas(pkg, '@nestjs/core')) add('nestjs', rel);
+      else if (pkgHas(pkg, 'react') || pkgHas(pkg, 'vue') || pkgHas(pkg, '@angular/core') || pkgHas(pkg, 'svelte') || pkgHas(pkg, 'solid-js')) add('react', rel);
       else add('node', rel);
     }
   };
@@ -184,7 +233,18 @@ export function buildChangeReport({ base, head, frameworks, entries, mappings, f
   const buckets = { backend: [], schema: [], frontend: [], other: [] };
   for (const e of entries) buckets[classifyPath(e.path, mappings)].push(e);
   const empty = buckets.backend.length === 0 && buckets.schema.length === 0 && buckets.frontend.length === 0;
-  return { base, head, frameworks, buckets, facts, empty };
+
+  // Per-file import metadata (skip deleted files)
+  const fileImports = {};
+  for (const e of entries) {
+    if (e.status === 'D') continue;
+    const ext = e.path.split('.').pop() || '';
+    const lang = ['py'].includes(ext) ? 'python' : 'js';
+    const content = readFileAtHead(e.path, head);
+    if (content) fileImports[e.path] = extractImports(content, lang);
+  }
+
+  return { base, head, frameworks, buckets, facts, fileImports, empty };
 }
 
 // ---------------- git + range resolution ----------------

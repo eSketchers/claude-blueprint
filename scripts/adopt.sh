@@ -835,13 +835,23 @@ case "$ACTION" in
         [[ -f "$BLUEPRINT_RESOLVED/scripts/$f" ]] && run "cp \"$BLUEPRINT_RESOLVED/scripts/$f\" \"$PROJECT_ROOT/scripts/$f\""
       done
       [[ -f "$PROJECT_ROOT/scripts/update-docs.sh" ]] && run "chmod +x \"$PROJECT_ROOT/scripts/update-docs.sh\""
-      # copy-if-absent so re-adopt never clobbers an edited config
-      if [[ ! -f "$PROJECT_ROOT/docs-sync/config.json" && -f "$BLUEPRINT_RESOLVED/docs-sync/config.example.json" ]]; then
-        run "cp \"$BLUEPRINT_RESOLVED/docs-sync/config.example.json\" \"$PROJECT_ROOT/docs-sync/config.json\""
+      # copy-if-absent; --force also refreshes an existing config (backs it up first)
+      if [[ -f "$BLUEPRINT_RESOLVED/docs-sync/config.example.json" ]]; then
+        if [[ ! -f "$PROJECT_ROOT/docs-sync/config.json" ]]; then
+          run "cp \"$BLUEPRINT_RESOLVED/docs-sync/config.example.json\" \"$PROJECT_ROOT/docs-sync/config.json\""
+          log "auto-docs: created docs-sync/config.json from example."
+        elif [[ $FORCE -eq 1 && $DRY_RUN -eq 0 ]]; then
+          _cfg_bak="$PROJECT_ROOT/docs-sync/config.json.backup-$(date +%Y-%m-%d-%H%M%S)"
+          cp "$PROJECT_ROOT/docs-sync/config.json" "$_cfg_bak"
+          cp "$BLUEPRINT_RESOLVED/docs-sync/config.example.json" "$PROJECT_ROOT/docs-sync/config.json"
+          log "auto-docs: refreshed docs-sync/config.json (backup: $(basename "$_cfg_bak"))."
+        fi
       fi
-      # pre-push hook — generates docs with each push; append-if-exists, never clobber
-      if [[ $DRY_RUN -eq 0 && -d "$PROJECT_ROOT/.git/hooks" && -f "$BLUEPRINT_RESOLVED/hooks/pre-push.sample" && ! -f "$PROJECT_ROOT/.git/hooks/pre-push" ]]; then
-        cp "$BLUEPRINT_RESOLVED/hooks/pre-push.sample" "$PROJECT_ROOT/.git/hooks/pre-push" && chmod +x "$PROJECT_ROOT/.git/hooks/pre-push" || warn "pre-push hook install failed (non-fatal)"
+      # pre-push hook — install on first adoption; refresh on --force
+      if [[ $DRY_RUN -eq 0 && -d "$PROJECT_ROOT/.git/hooks" && -f "$BLUEPRINT_RESOLVED/hooks/pre-push.sample" ]]; then
+        if [[ ! -f "$PROJECT_ROOT/.git/hooks/pre-push" || $FORCE -eq 1 ]]; then
+          cp "$BLUEPRINT_RESOLVED/hooks/pre-push.sample" "$PROJECT_ROOT/.git/hooks/pre-push" && chmod +x "$PROJECT_ROOT/.git/hooks/pre-push" || warn "pre-push hook install failed (non-fatal)"
+        fi
       fi
       ensure_gitignore_line "docs-sync/config.json"
       ensure_gitignore_line "reports/"

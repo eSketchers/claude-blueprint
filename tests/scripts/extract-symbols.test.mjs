@@ -7,13 +7,30 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  symbolPatterns, parseAstGrepJson, symbolId, bodyHash, diffSymbols, scopeFilter,
+  symbolPatterns, parseAstGrepJson, symbolId, bodyHash, diffSymbols, scopeFilter, symbolsForFile,
 } from '../../scripts/extract-symbols.mjs';
 
 test('symbolPatterns(): python includes def + class', () => {
   const p = symbolPatterns('python');
   assert.ok(p.some((x) => x.lang === 'python' && x.kind === 'function'));
   assert.ok(p.some((x) => x.lang === 'python' && x.kind === 'class'));
+});
+
+test('symbolPatterns(): react includes tsx/jsx component patterns', () => {
+  const p = symbolPatterns('react');
+  assert.ok(p.some((x) => x.lang === 'tsx' && x.kind === 'component'));
+  assert.ok(p.some((x) => x.lang === 'jsx' && x.kind === 'component'));
+  assert.ok(p.some((x) => x.pattern.includes('export default function')));
+});
+
+test('symbolPatterns(): nextjs includes tsx patterns', () => {
+  const p = symbolPatterns('nextjs');
+  assert.ok(p.some((x) => x.lang === 'tsx'));
+});
+
+test('symbolPatterns(): node does not include tsx patterns', () => {
+  const p = symbolPatterns('node');
+  assert.ok(!p.some((x) => x.lang === 'tsx'));
 });
 
 test('parseAstGrepJson(): uses metaVariables NAME + first-line signature', () => {
@@ -71,4 +88,14 @@ test('scopeFilter(): excludes tests/node_modules/migrations; honors include', ()
   assert.equal(scopeFilter('app/migrations/0001.py', {}), false);
   assert.equal(scopeFilter('src/orders.ts', { include: ['lib/**'] }), false);
   assert.equal(scopeFilter('lib/orders.ts', { include: ['lib/**'] }), true);
+});
+
+test('symbolsForFile(): filters symbols to a single file path', () => {
+  const symbols = [
+    { file: 'src/App.tsx', name: 'App', kind: 'component', signature: 'export default function App()', line: 1, id: 'src/App.tsx::component:App', hash: 'abc' },
+    { file: 'src/utils/gameLogic.js', name: 'calculateWinner', kind: 'function', signature: 'export function calculateWinner(squares)', line: 5, id: 'src/utils/gameLogic.js::function:calculateWinner', hash: 'def' },
+  ];
+  const result = symbolsForFile('src/App.tsx', symbols);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].name, 'App');
 });

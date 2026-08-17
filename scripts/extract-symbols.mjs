@@ -31,12 +31,29 @@ const DEFAULT_EXCLUDE = ['**/node_modules/**', '**/vendor/**', '**/dist/**', '**
 const PATTERNS = {
   ts: [
     { kind: 'function', lang: 'ts', pattern: 'export function $NAME($$$ARGS) { $$$ }' },
+    { kind: 'function', lang: 'ts', pattern: 'export default function $NAME($$$ARGS) { $$$ }' },
     { kind: 'class', lang: 'ts', pattern: 'export class $NAME { $$$ }' },
+    { kind: 'class', lang: 'ts', pattern: 'export default class $NAME { $$$ }' },
     { kind: 'const', lang: 'ts', pattern: 'export const $NAME = ($$$ARGS) => $$$' },
   ],
   js: [
     { kind: 'function', lang: 'js', pattern: 'export function $NAME($$$ARGS) { $$$ }' },
+    { kind: 'function', lang: 'js', pattern: 'export default function $NAME($$$ARGS) { $$$ }' },
     { kind: 'class', lang: 'js', pattern: 'export class $NAME { $$$ }' },
+    { kind: 'class', lang: 'js', pattern: 'export default class $NAME { $$$ }' },
+  ],
+  // tsx / jsx: same patterns as ts/js but ast-grep parses JSX syntax correctly.
+  tsx: [
+    { kind: 'component', lang: 'tsx', pattern: 'export function $NAME($$$ARGS) { $$$ }' },
+    { kind: 'component', lang: 'tsx', pattern: 'export default function $NAME($$$ARGS) { $$$ }' },
+    { kind: 'class', lang: 'tsx', pattern: 'export class $NAME { $$$ }' },
+    { kind: 'class', lang: 'tsx', pattern: 'export default class $NAME { $$$ }' },
+    { kind: 'const', lang: 'tsx', pattern: 'export const $NAME = ($$$ARGS) => $$$' },
+  ],
+  jsx: [
+    { kind: 'component', lang: 'jsx', pattern: 'export function $NAME($$$ARGS) { $$$ }' },
+    { kind: 'component', lang: 'jsx', pattern: 'export default function $NAME($$$ARGS) { $$$ }' },
+    { kind: 'class', lang: 'jsx', pattern: 'export class $NAME { $$$ }' },
   ],
   python: [
     { kind: 'function', lang: 'python', pattern: 'def $NAME($$$ARGS):\n    $$$' },
@@ -47,6 +64,7 @@ const PATTERNS = {
 /** Return the ast-grep patterns for a framework's languages. */
 export function symbolPatterns(framework) {
   if (framework === 'python' || framework === 'django-react') return [...PATTERNS.python, ...PATTERNS.ts];
+  if (framework === 'react' || framework === 'nextjs') return [...PATTERNS.ts, ...PATTERNS.tsx, ...PATTERNS.jsx, ...PATTERNS.js];
   return [...PATTERNS.ts, ...PATTERNS.js];
 }
 
@@ -123,6 +141,16 @@ export function scopeFilter(path, { include = [], exclude = [] } = {}) {
   return true;
 }
 
+/**
+ * Filter the full symbols list to those belonging to a single source file.
+ * Used by /update-docs when generating per-file docs.
+ * @param {string} filePath
+ * @param {Array<{file:string}>} symbols
+ */
+export function symbolsForFile(filePath, symbols) {
+  return symbols.filter((s) => s.file === filePath);
+}
+
 // ---------------- main (needs ast-grep) ----------------
 
 function hasAstGrep() {
@@ -148,7 +176,7 @@ function main() {
   if (args.help) { console.log('Usage: node scripts/extract-symbols.mjs [--config <path>] [--dry-run]'); return; }
 
   const config = args.config && existsSync(resolve(args.config)) ? JSON.parse(readFileSync(resolve(args.config), 'utf8')) : {};
-  const langs = config.symbol_reference?.languages || ['ts', 'js', 'python'];
+  const langs = config.symbol_reference?.languages || ['ts', 'tsx', 'jsx', 'js', 'python'];
   const patterns = langs.flatMap((l) => PATTERNS[l] || []);
 
   if (args.dryRun) {

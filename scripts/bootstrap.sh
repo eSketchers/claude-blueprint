@@ -154,7 +154,7 @@ install_tool "ast-grep" \
 
 install_tool "graphify" \
   "command -v graphify" \
-  "pip install --user graphifyy && graphify install"
+  "pip install --user graphifyy==0.9.50 && graphify install"
 
 install_tool "pre-commit" \
   "command -v pre-commit" \

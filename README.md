@@ -18,6 +18,7 @@ Reusable Claude Code baseline for all agency projects. Clone into a new project 
 | **MCP** | github | PRs / issues |
 | **CLI** | [ast-grep](https://ast-grep.github.io/) | Structural refactors |
 | **Hooks** | pre-commit + Flake8 / ESLint / Prettier | Lint on commit |
+| **Hooks** | docs-sync | Auto-updates `docs/` on every `git push` (on by default) |
 | **Optional** | [beads](https://github.com/gastownhall/beads) | Dependency-graph task tracker (orchestrator source) |
 
 ## Quick Start
@@ -34,6 +35,8 @@ cd ~/work/my-project
 "$BLUEPRINT_DIR/scripts/adopt.sh" --framework python        # Single framework
 "$BLUEPRINT_DIR/scripts/adopt.sh" --frameworks "python,nextjs"  # Monorepo
 "$BLUEPRINT_DIR/scripts/adopt.sh" --detect                  # Auto-detect
+# (adoption also installs a pre-push hook that auto-updates docs/ on every
+#  push — see "Auto-Updating Documentation" below; opt out with --no-docs-updater)
 
 # 3. Optional: Index your codebase for faster queries
 ./scripts/graphify-index.sh
@@ -132,6 +135,7 @@ Having issues? Check our comprehensive [Troubleshooting Guide](docs/TROUBLESHOOT
 - Orchestrator issues (config, budget, stuck tickets)
 - Dashboard problems (blank page, performance)
 - Agent crashes and profile errors
+- Auto-docs (`docs-sync`) not updating — check `docs-sync/config.json` exists and `enabled` is true; see `docs-sync/README.md`
 
 For additional support:
 - Run diagnostics: `./scripts/doctor.sh`
@@ -252,6 +256,24 @@ Hooks are registered in `.claude/settings.json` (`SessionStart`, `UserPromptSubm
 
 **Self-resume**: agents that block on `/wait-for-reply "<question>"` show up in the dashboard **Meeting Room**; your reply in the dashboard lands in `~/.claude-agency/inbox/<session>.txt`, the agent picks it up, and continues in the same turn. `/check-inbox` is the non-blocking variant for start-of-turn pulls. See `dashboard/README.md` for the full loop.
 
+## Auto-Updating Documentation (`docs-sync`)
+
+On by default during adoption (opt out with `adopt.sh --no-docs-updater`). Keeps an in-repo `docs/` folder current so humans and Claude can understand the project, without a separate CI workflow or any secrets — it uses your local `claude` auth.
+
+```bash
+git push   # a pre-push hook does the rest, automatically
+```
+
+What happens on every push:
+1. The pre-push hook diffs the commits being pushed and classifies changed files into backend / schema / frontend.
+2. `/update-docs` regenerates the affected doc sections (inside `AUTO-DOC` markers) plus a module/function reference, and appends a changelog entry — only re-describing symbols whose body actually changed.
+3. If anything under `docs/` changed, the hook amends it onto the commit you just made (`git commit --amend`) rather than creating a separate docs commit, so code and docs travel together with one clean history. This only touches local, not-yet-pushed history, so it's safe.
+4. The push completes either way — doc generation failing never blocks a push.
+
+A separate, **manually-invoked** command, `/update-product-docs`, generates audience-facing docs (feature guides, `docs/OVERVIEW.md`, `docs/WHATS-NEW.md`) — it does not run automatically on push.
+
+Full docs: `docs-sync/README.md`. Config: copy `docs-sync/config.example.json` → `docs-sync/config.json` (gitignored) to adjust which sections are generated.
+
 ## Layout
 
 ```
@@ -276,6 +298,13 @@ templates/
 pre-commit/
   .pre-commit-config.python.yaml
   .pre-commit-config.node.yaml
+
+docs-sync/              Config + docs for the auto-doc pre-push hook (see above)
+  config.example.json  Copy to config.json (gitignored) to adjust generated sections
+
+hooks/                  Sample git hooks
+  pre-push.sample       Runs /update-docs on every push — installed automatically by adopt.sh
+  post-commit.sample    Manual-install-only example (adopt.sh uses `graphify hook install` instead for the real post-commit re-index — see Token Optimization above)
 
 vendor/                 External tools vendored as git submodules
   superpowers/          Plugin: TDD + worktree + review skills (obra)

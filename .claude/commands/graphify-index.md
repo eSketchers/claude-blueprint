@@ -44,7 +44,7 @@ Use the graphify indexing script:
 If the script doesn't exist or graphify isn't installed, provide helpful instructions:
 
 1. Check if graphify is installed: `which graphify`
-2. If not: `pip install --user graphify` or follow vendor/graphify/README.md
+2. If not: `pip install --user graphifyy` (note: double-y in package name, CLI is still `graphify`)
 3. Run the script: `./scripts/graphify-index.sh`
 
 Report the output (nodes, edges, duration) to the user.
@@ -64,4 +64,4 @@ This is significantly cheaper than repeated file reads.
 
 - **"graphify not found"** → Install via `pip install --user graphifyy` (note: double-y in package name, CLI is still `graphify`)
 - **"Not in a git repository"** → Run from project root
-- **Index fails** → Check `.graphify/` permissions, try `rm -rf .graphify && /graphify-index --force`
+- **Index fails** → Check `graphify-out/` permissions, try `rm -rf graphify-out && /graphify-index --force`

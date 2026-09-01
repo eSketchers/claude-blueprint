@@ -671,12 +671,14 @@ The knowledge graph captures file structure, function/class definitions, and cod
 
 **Automatic updates (recommended):**
 
-```bash
-# Install post-commit hook for automatic incremental updates
-cp hooks/post-commit.sample .git/hooks/post-commit
-chmod +x .git/hooks/post-commit
+`scripts/adopt.sh` already installs this for you — during adoption it runs `graphify hook install`, graphify's own idempotent hook installer, which sets up both `post-commit` and `post-checkout` git hooks (respecting `core.hooksPath` for Husky-based projects). No manual copy-paste needed:
 
-# Now graph updates automatically after each commit (5-15s overhead)
+```bash
+# Opt out during adoption if you don't want this:
+adopt.sh --no-graphify-hook
+
+# Already adopted without it, or want to (re)install manually later?
+graphify hook install
 ```
 
 ### Phase 2: Templates & Tools
@@ -1301,7 +1303,7 @@ pip install --user graphifyy
 
 ```bash
 # After merging a large feature (incremental automatically)
-graphify index .
+graphify update .
 
 # Query the graph instead of reading files
 graphify query "What modules handle authentication?"
@@ -1309,12 +1311,14 @@ graphify query "What modules handle authentication?"
 
 **Automatic Updates (Recommended):**
 
-```bash
-# Install post-commit hook for automatic incremental updates
-cp hooks/post-commit.sample .git/hooks/post-commit
-chmod +x .git/hooks/post-commit
+`scripts/adopt.sh` already installs this for you — during adoption it runs `graphify hook install`, graphify's own idempotent hook installer, which sets up both `post-commit` and `post-checkout` git hooks (respecting `core.hooksPath` for Husky-based projects). No manual copy-paste needed:
 
-# Now graph updates automatically after each commit (5-15s overhead)
+```bash
+# Opt out during adoption if you don't want this:
+adopt.sh --no-graphify-hook
+
+# Already adopted without it, or want to (re)install manually later?
+graphify hook install
 ```
 
 **When to re-index:**

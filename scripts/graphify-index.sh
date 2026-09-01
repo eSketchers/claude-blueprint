@@ -17,7 +17,7 @@ set -euo pipefail
 
 FORCE=0
 QUIET=0
-GRAPHIFY_DIR=".graphify"
+GRAPHIFY_DIR="graphify-out"
 INDEX_AGE_THRESHOLD_HOURS=24
 
 # Parse args
@@ -48,12 +48,12 @@ if ! git rev-parse --git-dir &>/dev/null; then
 fi
 
 # Check if we should skip (recent index exists and --force not set)
-if [[ -f "$GRAPHIFY_DIR/index.json" ]] && [[ "$FORCE" -eq 0 ]]; then
+if [[ -f "$GRAPHIFY_DIR/graph.json" ]] && [[ "$FORCE" -eq 0 ]]; then
   # Get file age in hours
   if [[ "$(uname)" == "Darwin" ]]; then
-    AGE_HOURS=$(( ($(date +%s) - $(stat -f %m "$GRAPHIFY_DIR/index.json")) / 3600 ))
+    AGE_HOURS=$(( ($(date +%s) - $(stat -f %m "$GRAPHIFY_DIR/graph.json")) / 3600 ))
   else
-    AGE_HOURS=$(( ($(date +%s) - $(stat -c %Y "$GRAPHIFY_DIR/index.json")) / 3600 ))
+    AGE_HOURS=$(( ($(date +%s) - $(stat -c %Y "$GRAPHIFY_DIR/graph.json")) / 3600 ))
   fi
 
   if [[ "$AGE_HOURS" -lt "$INDEX_AGE_THRESHOLD_HOURS" ]]; then
@@ -67,9 +67,9 @@ log "Indexing codebase..."
 START_TIME=$(date +%s)
 
 if [[ "$QUIET" -eq 1 ]]; then
-  graphify index . &>/dev/null
+  graphify update . &>/dev/null
 else
-  graphify index .
+  graphify update .
 fi
 
 END_TIME=$(date +%s)
@@ -78,9 +78,9 @@ DURATION=$((END_TIME - START_TIME))
 log "Indexing complete in ${DURATION}s"
 
 # Output stats if not quiet
-if [[ "$QUIET" -eq 0 ]] && [[ -f "$GRAPHIFY_DIR/index.json" ]]; then
-  NODE_COUNT=$(jq '.nodes | length' "$GRAPHIFY_DIR/index.json" 2>/dev/null || echo "?")
-  EDGE_COUNT=$(jq '.edges | length' "$GRAPHIFY_DIR/index.json" 2>/dev/null || echo "?")
+if [[ "$QUIET" -eq 0 ]] && [[ -f "$GRAPHIFY_DIR/graph.json" ]]; then
+  NODE_COUNT=$(jq '.nodes | length' "$GRAPHIFY_DIR/graph.json" 2>/dev/null || echo "?")
+  EDGE_COUNT=$(jq '.links | length' "$GRAPHIFY_DIR/graph.json" 2>/dev/null || echo "?")
   log "Graph: ${NODE_COUNT} nodes, ${EDGE_COUNT} edges"
 fi
 

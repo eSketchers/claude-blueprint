@@ -252,17 +252,84 @@ test('KNOWN LIMITATION: a non-standard subdirectory name (e.g. "server/") is NOT
   }
 });
 
-test('KNOWN LIMITATION: nx/lerna/pnpm-workspace monorepo markers are not recognized as monorepo signals', () => {
+test('FIXED (was a known limitation): package.json "workspaces" globs are now scanned, finding real frameworks inside an nx-style monorepo', () => {
   const dir = freshProject();
   try {
     writeJSON(join(dir, 'nx.json'), { npmScope: 'myorg' });
     writeJSON(join(dir, 'package.json'), { name: 'monorepo-root', private: true, workspaces: ['packages/*'] });
-    // No "next"/"@nestjs/core" dependency at root, and no packages/ subdir scan —
-    // this correctly falls through to the generic "node" bucket rather than
-    // recognizing it as an nx workspace, which is a real (documented) gap.
+    mkdirSync(join(dir, 'packages', 'api'), { recursive: true });
+    writeFileSync(join(dir, 'packages', 'api', 'requirements.txt'), 'flask\n');
+
     const result = runAdopt(dir, ['--detect']);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Auto-detected 1 framework\(s\): node/, 'nx-specific structure is invisible to detection — it just sees a root package.json and calls it "node"');
+    // "node" (root package.json, no next/@nestjs/core) + "python" (resolved
+    // via the workspaces glob into packages/api/) — both found, not just
+    // the root falling through to a single generic "node" as it used to.
+    assert.match(result.stdout, /Auto-detected 2 framework\(s\): node python/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('FIXED (was a known limitation): lerna.json\'s "packages" glob is scanned', () => {
+  const dir = freshProject();
+  try {
+    writeJSON(join(dir, 'lerna.json'), { packages: ['packages/*'] });
+    mkdirSync(join(dir, 'packages', 'api'), { recursive: true });
+    writeFileSync(join(dir, 'packages', 'api', 'requirements.txt'), 'flask\n');
+
+    const result = runAdopt(dir, ['--detect']);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Auto-detected 1 framework\(s\): python/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('FIXED (was a known limitation): pnpm-workspace.yaml\'s "packages" glob is scanned', () => {
+  const dir = freshProject();
+  try {
+    writeFileSync(join(dir, 'pnpm-workspace.yaml'), "packages:\n  - 'apps/*'\n  - 'packages/*'\n");
+    mkdirSync(join(dir, 'apps', 'web'), { recursive: true });
+    writeJSON(join(dir, 'apps', 'web', 'package.json'), { name: 'web', dependencies: { next: '^14.0.0' } });
+
+    const result = runAdopt(dir, ['--detect']);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Auto-detected 1 framework\(s\): nextjs/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('workspace-glob scanning dedupes against the same framework found via a hardcoded subdirectory name', () => {
+  const dir = freshProject();
+  try {
+    writeJSON(join(dir, 'package.json'), { name: 'root', workspaces: ['backend'] });
+    mkdirSync(join(dir, 'backend'));
+    writeFileSync(join(dir, 'backend', 'requirements.txt'), 'flask\n');
+
+    const result = runAdopt(dir, ['--detect']);
+    assert.equal(result.status, 0, result.stderr);
+    // "backend" matches both the hardcoded-subdir loop AND the workspaces
+    // glob ("backend" as a literal, non-wildcard entry) — python must be
+    // counted once, not twice.
+    assert.match(result.stdout, /Auto-detected 2 framework\(s\): node python/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('KNOWN LIMITATION (genuinely remaining): a bare nx.json with no package.json "workspaces" field and no other resolvable frameworks fails with a specific, actionable error', () => {
+  const dir = freshProject();
+  try {
+    writeJSON(join(dir, 'nx.json'), { npmScope: 'myorg' });
+    // No package.json, no lerna.json, no pnpm-workspace.yaml — nx.json alone
+    // has no glob field of its own (confirmed against Nx's own docs/repo),
+    // so there is genuinely nothing to scan.
+    const result = runAdopt(dir, ['--detect']);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Detected an Nx workspace.*couldn't resolve its project directories/);
+    assert.match(result.stderr, /--frameworks/, 'should point the user at the manual override');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -9,6 +9,10 @@
 # Usage:
 #   source "$BLUEPRINT_DIR/scripts/lib/detect-frameworks.sh"
 #   while IFS= read -r fw; do ...; done < <(detect_frameworks "$PROJECT_ROOT")
+#
+# Note: `set -u` below applies to whatever shell sources this file, not just
+# this file's own functions — a no-op when the caller (adopt.sh) already runs
+# `set -euo pipefail`, but worth knowing if sourcing this elsewhere.
 
 set -u
 
@@ -21,7 +25,10 @@ set -u
 read_workspace_globs_json() {
   local file="$1" field="$2"
   [[ -f "$file" ]] || return 0
-  command -v jq >/dev/null 2>&1 || return 0
+  if ! command -v jq >/dev/null 2>&1; then
+    printf '[warn] jq not found; cannot read the "%s" field from %s — workspace-glob detection may be incomplete\n' "$field" "$file" >&2
+    return 0
+  fi
   jq -r --arg f "$field" '(.[$f] // []) | if type == "array" then .[] else empty end' "$file" 2>/dev/null
 }
 
@@ -47,8 +54,11 @@ detect_frameworks() {
   local project_root="$1"
   local detected=()
 
-  # Helper to check if already detected
-  has_framework() {
+  # Helper to check if already detected. Prefixed (_df_ = detect-frameworks)
+  # since bash has no local-function scope — an unprefixed name would leak
+  # into whatever shell sources this file, risking collision with a
+  # same-named function the caller (or another sourced lib) defines.
+  _df_has_framework() {
     local fw="$1"
     local f
     for f in "${detected[@]+"${detected[@]}"}"; do
@@ -61,30 +71,30 @@ detect_frameworks() {
   # match (deduplicated). Shared by the root check, the hardcoded-subdir
   # scan, and the workspace-glob-resolved directory scan below, so the
   # detection rules only live in one place.
-  scan_dir_for_framework() {
+  _df_scan_dir_for_framework() {
     local dir="$1"
 
     if [[ -f "$dir/pyproject.toml" ]] || [[ -f "$dir/requirements.txt" ]] || [[ -f "$dir/setup.py" ]] || [[ -f "$dir/manage.py" ]]; then
-      has_framework "python" || detected+=("python")
+      _df_has_framework "python" || detected+=("python")
     fi
 
     if [[ -f "$dir/package.json" ]]; then
       if grep -q '"next"' "$dir/package.json" 2>/dev/null; then
-        has_framework "nextjs" || detected+=("nextjs")
+        _df_has_framework "nextjs" || detected+=("nextjs")
       elif grep -q '"@nestjs/core"' "$dir/package.json" 2>/dev/null; then
-        has_framework "nestjs" || detected+=("nestjs")
+        _df_has_framework "nestjs" || detected+=("nestjs")
       else
-        has_framework "node" || detected+=("node")
+        _df_has_framework "node" || detected+=("node")
       fi
     fi
   }
 
-  scan_dir_for_framework "$project_root"
+  _df_scan_dir_for_framework "$project_root"
 
   # Scan subdirectories (backend/, frontend/, api/, web/, mobile/, etc.)
   for subdir in backend frontend api web mobile apps services; do
     local dir="$project_root/$subdir"
-    [[ -d "$dir" ]] && scan_dir_for_framework "$dir"
+    [[ -d "$dir" ]] && _df_scan_dir_for_framework "$dir"
   done
 
   # Workspace-manager awareness: lerna.json and pnpm-workspace.yaml both
@@ -113,14 +123,25 @@ detect_frameworks() {
     local glob resolved nullglob_was_set=0
     shopt -q nullglob && nullglob_was_set=1
     shopt -s nullglob
+    # IFS= for the glob-expansion loop below: `$glob` must stay unquoted for
+    # globbing to expand it, but that also subjects it to word-splitting —
+    # without this, a glob like "my apps/*" (a legal, if uncommon, workspace
+    # directory name containing a space) silently expands to two separate
+    # words ("my" and "apps/*") instead of one path, and the real match is
+    # missed with no warning. Restored right after the loop since the rest
+    # of this function relies on normal word-splitting.
+    local old_ifs="$IFS"
     for glob in "${globs[@]}"; do
       [[ "$glob" == !* ]] && continue  # exclusion patterns aren't expanded, just skipped
-      # No subshell here (unlike a `( ... )` group) — scan_dir_for_framework's
+      # No subshell here (unlike a `( ... )` group) — _df_scan_dir_for_framework's
       # `detected+=(...)` must mutate this function's own array, not a copy
       # inside a subshell that vanishes when the group exits.
+      IFS=
       for resolved in "$project_root"/$glob; do
-        [[ -d "$resolved" ]] && scan_dir_for_framework "$resolved"
+        IFS="$old_ifs"
+        [[ -d "$resolved" ]] && _df_scan_dir_for_framework "$resolved"
       done
+      IFS="$old_ifs"
     done
     [[ "$nullglob_was_set" -eq 0 ]] && shopt -u nullglob
   fi

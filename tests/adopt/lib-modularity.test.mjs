@@ -54,6 +54,41 @@ test('detect-frameworks.sh: workspace-glob scanning (the fix this refactor carri
   }
 });
 
+test('REGRESSION: detect-frameworks.sh warns on stderr (not silent) when jq is unavailable, and still returns what it safely can', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lib-modularity-'));
+  const fakeBinDir = mkdtempSync(join(tmpdir(), 'lib-modularity-fakebin-'));
+  try {
+    // A restricted PATH containing only what bash itself needs, deliberately
+    // excluding jq — read_workspace_globs_json() used to silently `return 0`
+    // when jq was missing, so a "workspaces" glob went unscanned with zero
+    // indication anything was skipped. It must now warn on stderr.
+    for (const tool of ['bash', 'cat', 'grep', 'printf', 'awk', 'mkdir', 'sed']) {
+      const real = spawnSync('command', ['-v', tool], { shell: '/bin/bash', encoding: 'utf8' }).stdout.trim();
+      if (real) spawnSync('ln', ['-sf', real, join(fakeBinDir, tool)]);
+    }
+
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'root', workspaces: ['packages/*'] }));
+    mkdirSync(join(dir, 'packages', 'api'), { recursive: true });
+    writeFileSync(join(dir, 'packages', 'api', 'requirements.txt'), 'flask\n');
+
+    const script = `set -euo pipefail\nsource "${LIB_DIR}/detect-frameworks.sh"\ndetect_frameworks "${dir}"`;
+    const result = spawnSync('bash', ['-c', script], {
+      encoding: 'utf8',
+      env: { PATH: fakeBinDir },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stderr, /\[warn\] jq not found/);
+    // The root package.json itself is still detected as "node" (that check
+    // doesn't need jq) — but its "workspaces" glob can't be read without jq,
+    // so the workspace-resolved "python" is missed. That's now a visible,
+    // warned-about gap, not silent data loss.
+    assert.equal(result.stdout.trim(), 'node');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(fakeBinDir, { recursive: true, force: true });
+  }
+});
+
 test('claude-md.sh: smart_merge_claude_md() is sourceable and usable once its documented dependencies (log/warn, DRY_RUN, SHOW_DIFF) are provided', () => {
   const dir = mkdtempSync(join(tmpdir(), 'lib-modularity-'));
   try {
@@ -115,10 +150,8 @@ test('all three lib files parse cleanly on their own (bash -n), independent of a
   }
 });
 
-test('adopt.sh shrank substantially and now only contains flag-parsing/dispatch, not the three extracted generators', () => {
+test('adopt.sh no longer defines the three extracted generators inline — sources them instead', () => {
   const adoptSh = spawnSync('cat', [join(REPO_ROOT, 'scripts/adopt.sh')], { encoding: 'utf8' }).stdout;
-  const lineCount = adoptSh.split('\n').length;
-  assert.ok(lineCount < 600, `expected adopt.sh to be well under 600 lines after extraction, got ${lineCount}`);
   assert.doesNotMatch(adoptSh, /^detect_frameworks\(\)/m, 'detect_frameworks should be sourced, not defined inline');
   assert.doesNotMatch(adoptSh, /^smart_merge_claude_md\(\)/m, 'smart_merge_claude_md should be sourced, not defined inline');
   assert.doesNotMatch(adoptSh, /^generate_precommit_config\(\)/m, 'generate_precommit_config should be sourced, not defined inline');

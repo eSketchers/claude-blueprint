@@ -39,10 +39,11 @@ NOTIF="${CLAUDE_NOTIFICATION_MESSAGE:-}"
 # `python3 -c` subprocess per field (was up to 7 spawns per invocation — this
 # hook fires on both PreToolUse and PostToolUse for every tool call in every
 # session, so that overhead was on the hottest path in the whole system;
-# measured ~340-680ms of pure subprocess-spawn latency per tool call before
-# this fix). Conditional/truncation logic that used to live in bash
-# ([[ -n ]] checks, trunc()) now lives in Python too, so there's exactly one
-# place that decides the event shape.
+# measured ~793ms -> ~135ms per invocation with every field populated, an
+# ~83% reduction — see tests/hooks/agency-emit.test.mjs for the benchmark).
+# Conditional/truncation logic that used to live in bash ([[ -n ]] checks,
+# trunc()) now lives in Python too, so there's exactly one place that decides
+# the event shape.
 if command -v python3 >/dev/null 2>&1; then
   python3 -c '
 import json, sys
@@ -71,7 +72,9 @@ else
   # No python3 at all (rare) — minimal bash fallback, single-line-only
   # fields assumed (best-effort; python3 is effectively always present).
   trunc() { printf '%s' "${1:0:500}"; }
-  esc() { local v="${1:-}"; printf '%s' "${v//\"/\\\"}"; }
+  # Backslash must be escaped before the quote — escaping in the other order
+  # would double-escape the backslashes this step itself just inserted.
+  esc() { local v="${1:-}"; v="${v//\\/\\\\}"; printf '%s' "${v//\"/\\\"}"; }
   {
     printf '{"ts":%d,"kind":"%s","session_id":"%s","repo":"%s","repo_path":"%s","branch":"%s","ticket":"%s"' \
       "$TS_MS" "$(esc "$KIND")" "$(esc "$SESSION_ID")" "$(esc "$(basename "$REPO")")" "$(esc "$REPO")" "$(esc "$BRANCH")" "$(esc "$TICKET")"

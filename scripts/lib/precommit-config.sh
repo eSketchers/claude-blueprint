@@ -10,6 +10,10 @@
 # Usage:
 #   source "$BLUEPRINT_DIR/scripts/lib/precommit-config.sh"
 #   generate_precommit_config "${FRAMEWORKS[@]}"
+#
+# Note: `set -u` below applies to whatever shell sources this file, not just
+# this file's own functions — a no-op when the caller (adopt.sh) already runs
+# `set -euo pipefail`, but worth knowing if sourcing this elsewhere.
 
 set -u
 

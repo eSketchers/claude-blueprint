@@ -301,6 +301,27 @@ test('FIXED (was a known limitation): pnpm-workspace.yaml\'s "packages" glob is 
   }
 });
 
+test('REGRESSION: a workspace glob whose resolved path contains a space is not lost to word-splitting', () => {
+  const dir = freshProject();
+  try {
+    // "my apps/*" is a legal (if uncommon) workspace glob. An earlier version
+    // of detect_frameworks() left the glob unquoted for expansion but didn't
+    // guard against word-splitting on the result, so "my apps/svc" silently
+    // expanded to two separate words ("my" and "apps/svc") instead of one
+    // path — the resolved directory was never scanned, and python went
+    // undetected with no warning at all.
+    writeJSON(join(dir, 'package.json'), { name: 'root', workspaces: ['my apps/*'] });
+    mkdirSync(join(dir, 'my apps', 'svc'), { recursive: true });
+    writeFileSync(join(dir, 'my apps', 'svc', 'requirements.txt'), 'flask\n');
+
+    const result = runAdopt(dir, ['--detect']);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Auto-detected 2 framework\(s\): node python/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('workspace-glob scanning dedupes against the same framework found via a hardcoded subdirectory name', () => {
   const dir = freshProject();
   try {

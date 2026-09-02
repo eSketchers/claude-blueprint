@@ -21,7 +21,7 @@ agents.backup/
 docs-sync/config.json
 reports/
 
-# Local Python venv for running graphify (isolated, not global — see docs/superpowers/specs/)
+# Local Python venv for running graphify (isolated, not global)
 .venv-graphify/
 .python-version
 

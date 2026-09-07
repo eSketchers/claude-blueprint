@@ -21,5 +21,12 @@ agents.backup/
 docs-sync/config.json
 reports/
 
+# Local Python venv for running graphify (isolated, not global)
+.venv-graphify/
+.python-version
+
+# Generated graphify output (graph.json, graph.html, cache, report)
+graphify-out/
+
 # macOS Finder cruft
 .DS_Store

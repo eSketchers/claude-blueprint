@@ -8,16 +8,18 @@ Complete walkthrough for setting up the Claude Agency Blueprint in your project.
 - **Node.js 20+** - For Claude Code and various tooling
 - **Python 3.8+** - For pre-commit hooks and Python tooling
 - **Claude Code CLI** - The foundation
+- **[uv](https://docs.astral.sh/uv/)** - Required by `bootstrap.sh` to install the `serena` MCP server (`uvx --from git+... serena-mcp-server`). Serena's own maintainers explicitly recommend installing it only via `uv` — other methods (pip, marketplaces) are documented upstream as outdated/unsupported — so this isn't optional if you want the serena MCP working.
 
 Install:
 ```bash
 # macOS
-brew install git jq pre-commit node python@3.11 gh
+brew install git jq pre-commit node python@3.11 gh uv
 npm install -g @anthropic-ai/claude-code
 pip install --user pre-commit
 
 # Ubuntu
 sudo apt install git jq python3-pip nodejs npm gh
+curl -LsSf https://astral.sh/uv/install.sh | sh
 npm install -g @anthropic-ai/claude-code
 pip install --user pre-commit
 ```

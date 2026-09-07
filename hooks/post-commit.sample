@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Git post-commit hook — runs after each commit
 #
-# Installation (per project):
+# Manual-install-only example. scripts/adopt.sh does NOT install or reference
+# this file — it runs `graphify hook install` instead (graphify's own
+# idempotent hook installer, covering post-commit and post-checkout; skip
+# with adopt.sh's --no-graphify-hook flag). This file is kept only for
+# projects that want to manage the hook by hand instead:
 #   cp hooks/post-commit.sample .git/hooks/post-commit
 #   chmod +x .git/hooks/post-commit
-#
-# Or let adopt.sh install it automatically with --install-git-hooks
 
 set -euo pipefail
 

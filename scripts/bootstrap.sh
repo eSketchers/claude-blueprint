@@ -121,27 +121,27 @@ log "Registering MCP servers..."
 
 install_tool "mcp-serena" \
   "claude mcp list | grep -q serena" \
-  "claude mcp add serena -- uvx --from git+https://github.com/oraios/serena serena-mcp-server"
+  "claude mcp add serena -- uvx --from git+https://github.com/oraios/serena@v1.7.0 serena-mcp-server"
 
 install_tool "mcp-context7" \
   "claude mcp list | grep -q context7" \
-  "claude mcp add context7 -- npx -y @upstash/context7-mcp"
+  "claude mcp add context7 -- npx -y @upstash/context7-mcp@4.0.4"
 
 install_tool "mcp-sequential-thinking" \
   "claude mcp list | grep -q sequential-thinking" \
-  "claude mcp add sequential-thinking -- npx -y @modelcontextprotocol/server-sequential-thinking"
+  "claude mcp add sequential-thinking -- npx -y @modelcontextprotocol/server-sequential-thinking@2026.8.31"
 
 install_tool "mcp-memory" \
   "claude mcp list | grep -q memory" \
-  "claude mcp add memory -- npx -y @modelcontextprotocol/server-memory"
+  "claude mcp add memory -- npx -y @modelcontextprotocol/server-memory@2026.8.31"
 
 install_tool "mcp-playwright" \
   "claude mcp list | grep -q playwright" \
-  "claude mcp add playwright -- npx -y @playwright/mcp@latest"
+  "claude mcp add playwright -- npx -y @playwright/mcp@0.0.80"
 
 install_tool "mcp-github" \
   "claude mcp list | grep -q github" \
-  "claude mcp add github -- npx -y @modelcontextprotocol/server-github"
+  "claude mcp add github -- npx -y @modelcontextprotocol/server-github@2025.4.8"
 
 # ------------------------------------------------------------------
 # 3. Host-side tooling (ast-grep, graphify, pre-commit)
@@ -150,15 +150,15 @@ log "Installing host tools..."
 
 install_tool "ast-grep" \
   "command -v ast-grep" \
-  "npm install -g @ast-grep/cli"
+  "npm install -g @ast-grep/cli@0.45.3"
 
 install_tool "graphify" \
   "command -v graphify" \
-  "pip install --user graphifyy && graphify install"
+  "pip install --user graphifyy==0.9.50 && graphify install"
 
 install_tool "pre-commit" \
   "command -v pre-commit" \
-  "pip install --user pre-commit"
+  "pip install --user pre-commit==4.3.0"
 
 # ------------------------------------------------------------------
 # 4. Verification

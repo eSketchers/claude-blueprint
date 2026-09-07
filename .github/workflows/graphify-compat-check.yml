@@ -1,0 +1,98 @@
+name: Graphify compatibility check
+
+# Weekly check that the latest PyPI graphifyy release still works the way
+# scripts/graphify-index.sh assumes. bootstrap.sh pins an exact known-good
+# version (see scripts/bootstrap.sh's "graphify" install_tool call) precisely
+# so a future graphify release can't silently break adopters. scripts/
+# graphify-index.sh already went from "index" -> "update" once because a
+# graphify release changed its CLI without anyone noticing for months (an
+# internal audit finding, not published in this repo) — this workflow exists
+# so the next such change is caught automatically instead of by accident.
+#
+# On failure: opens (or updates, if already open) a tracked issue instead of
+# just going red silently. On success: no action needed — a human still
+# reviews and bumps the pin deliberately; "the workflow passed" is not the
+# same as "someone verified the output is still correct."
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays, 06:00 UTC
+  workflow_dispatch: {} # allow manual runs
+
+jobs:
+  compat-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install latest graphifyy from PyPI (not the pinned version)
+        run: pip install --user graphifyy
+
+      - name: Report installed version
+        run: |
+          VERSION="$(graphify --version | sed -n 's/[^0-9]*\([0-9][0-9.]*\).*/\1/p')"
+          echo "GRAPHIFY_VERSION=${VERSION:-unknown}" >> "$GITHUB_ENV"
+          graphify --version
+
+      - name: Run graphify update against this repo
+        id: update
+        continue-on-error: true
+        run: |
+          graphify update . 2>&1 | tee /tmp/graphify-output.log
+
+      - name: Verify real output was produced
+        id: verify
+        if: steps.update.outcome == 'success'
+        continue-on-error: true
+        run: |
+          test -f graphify-out/graph.json
+          python3 -c "
+          import json
+          d = json.load(open('graphify-out/graph.json'))
+          assert 'nodes' in d and 'links' in d, 'unexpected graph.json schema'
+          assert len(d['nodes']) > 0, 'graph.json has zero nodes'
+          print(f\"OK: {len(d['nodes'])} nodes, {len(d['links'])} links\")
+          "
+
+      - name: Open/update tracking issue on failure
+        if: steps.update.outcome == 'failure' || steps.verify.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # A fixed marker in the body (not the version-suffixed title) is what
+          # dedupe searches on below — a title search would file a new issue
+          # every week once the version number changes, defeating the "update
+          # instead of duplicate" goal stated in this workflow's header comment.
+          MARKER="<!-- graphify-compat-check -->"
+          TITLE="graphify compat check failing (currently: $GRAPHIFY_VERSION)"
+
+          {
+            echo "$MARKER"
+            echo ""
+            echo "The weekly compat-check workflow found that the latest PyPI \`graphifyy\` release (\`$GRAPHIFY_VERSION\`) no longer works the way \`scripts/graphify-index.sh\` (and \`docs/ADVANCED.md\`) assume."
+            echo ""
+            echo "**The pinned version in \`scripts/bootstrap.sh\` (\`graphifyy==0.9.50\`) is unaffected** — this only means the *next* deliberate upgrade needs investigation before bumping the pin."
+            echo ""
+            echo "Command output:"
+            echo '```'
+            tail -50 /tmp/graphify-output.log 2>/dev/null
+            echo '```'
+            echo ""
+            echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > /tmp/issue-body.md
+
+          EXISTING=$(gh issue list --search "$MARKER in:body" --state open --json number --jq '.[0].number')
+          if [[ -n "$EXISTING" ]]; then
+            gh issue comment "$EXISTING" --body-file /tmp/issue-body.md
+          else
+            # --label is best-effort: a missing/renamed "bug" label must not
+            # prevent the issue itself from being filed, since that would be
+            # this workflow's own failure-reporting path failing silently —
+            # exactly what it exists to prevent for graphify.
+            gh issue create --title "$TITLE" --body-file /tmp/issue-body.md --label "bug" \
+              || gh issue create --title "$TITLE" --body-file /tmp/issue-body.md
+          fi

@@ -17,6 +17,13 @@ jobs:
         with:
           node-version: '20'
 
+      # Lets tests/adopt/graphify-hook.test.mjs exercise the real, pinned
+      # graphify CLI (matching scripts/bootstrap.sh's exact pinned version)
+      # instead of skipping those cases — graphify requires Python >=3.10.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Configure git identity (needed by tests that create commits in scratch repos)
         run: |
           git config --global user.email "ci@example.com"

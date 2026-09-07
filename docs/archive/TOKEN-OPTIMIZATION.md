@@ -101,20 +101,13 @@ pip install --user graphifyy
 **Usage:**
 ```bash
 # After merging a large feature (incremental automatically)
-graphify index .
+graphify update .
 
 # Query the graph instead of reading files
 graphify query "What modules handle authentication?"
 ```
 
-**Automatic Updates (Recommended):**
-```bash
-# Install post-commit hook for automatic incremental updates
-cp hooks/post-commit.sample .git/hooks/post-commit
-chmod +x .git/hooks/post-commit
-
-# Now graph updates automatically after each commit (5-15s overhead)
-```
+**Automatic Updates (Recommended):** `scripts/adopt.sh` already installs this for you — during adoption it runs `graphify hook install`, graphify's own idempotent hook installer, which sets up both `post-commit` and `post-checkout` git hooks. No manual copy-paste needed; see [Advanced Guide](../ADVANCED.md) for the full command and how to skip it (`--no-graphify-hook`).
 
 **When to re-index:**
 

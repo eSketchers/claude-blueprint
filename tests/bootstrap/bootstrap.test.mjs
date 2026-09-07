@@ -91,6 +91,33 @@ test('bootstrap.sh --dry-run: does NOT require the claude CLI to be present (fix
   assert.doesNotMatch(result.stderr, /npx not found/);
 });
 
+test('bootstrap.sh: every install_tool call for a floating npm/pip/git-tag-capable tool is version-pinned (LOW PRIORITY item 2 fix)', () => {
+  // Regression test for the "everything except graphify floats unpinned"
+  // finding from an internal audit (not published in this repo). Each of
+  // these previously installed whatever was newest at bootstrap time with
+  // no pin; each now names an exact version/tag.
+  const result = run(['--dry-run']);
+  assert.equal(result.status, 0, result.stderr);
+
+  const pinnedPatterns = [
+    /uvx --from git\+https:\/\/github\.com\/oraios\/serena@v[\d.]+ serena-mcp-server/,
+    /npx -y @upstash\/context7-mcp@[\d.]+/,
+    /npx -y @modelcontextprotocol\/server-sequential-thinking@[\d.]+/,
+    /npx -y @modelcontextprotocol\/server-memory@[\d.]+/,
+    /npx -y @playwright\/mcp@[\d.]+/,
+    /npx -y @modelcontextprotocol\/server-github@[\d.]+/,
+    /npm install -g @ast-grep\/cli@[\d.]+/,
+    /pip install --user pre-commit==[\d.]+/,
+    /pip install --user graphifyy==[\d.]+/,
+  ];
+  for (const pattern of pinnedPatterns) {
+    assert.match(result.stdout, pattern, `expected a pinned install command matching ${pattern}`);
+  }
+  // The unpinned forms this fix removed must not reappear.
+  assert.doesNotMatch(result.stdout, /@playwright\/mcp@latest/);
+  assert.doesNotMatch(result.stdout, /git\+https:\/\/github\.com\/oraios\/serena serena-mcp-server/, 'serena install must be pinned to a tag, not float on the default branch');
+});
+
 test('bootstrap.sh (real run, no --dry-run): still requires the claude CLI, failing fast with a clear message if not', () => {
   // The prerequisite check must still apply to a REAL install — only
   // --dry-run is exempt. Simulate a machine without `claude` on PATH.

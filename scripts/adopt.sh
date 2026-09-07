@@ -38,7 +38,14 @@ Usage: adopt.sh [framework options] [other options]
 Framework options (one required):
   --framework F       Single framework (legacy). F = python|node|nextjs|nestjs
   --frameworks F1,F2  Multiple frameworks (comma-separated). For monorepos.
-  --detect            Auto-detect all frameworks in the repo.
+  --detect            Auto-detect all frameworks in the repo. Scans the root,
+                      7 hardcoded subdirectory names (backend/frontend/api/
+                      web/mobile/apps/services), and any real workspace glob
+                      declared by package.json ("workspaces"), lerna.json
+                      ("packages"), or pnpm-workspace.yaml ("packages"). A
+                      bare nx.json with no resolvable glob can't be scanned
+                      automatically (Nx has no glob field of its own) —
+                      use --frameworks to list them explicitly in that case.
 
 Other options:
   --profile P             'backend' merges a stricter deny-list. Default for python/nestjs.
@@ -153,65 +160,9 @@ log "Blueprint: $BLUEPRINT_RESOLVED"
 log "Project:   $PROJECT_ROOT"
 
 # ---------- Framework detection ----------
-detect_frameworks() {
-  local project_root="$1"
-  local detected=()
 
-  # Helper to check if already detected
-  has_framework() {
-    local fw="$1"
-    local f
-    for f in "${detected[@]+"${detected[@]}"}"; do
-      [[ "$f" == "$fw" ]] && return 0
-    done
-    return 1
-  }
-
-  # Check root for Python
-  if [[ -f "$project_root/pyproject.toml" ]] || \
-     [[ -f "$project_root/requirements.txt" ]] || \
-     [[ -f "$project_root/setup.py" ]]; then
-    detected+=("python")
-  fi
-
-  # Check root for Node/Next.js
-  if [[ -f "$project_root/package.json" ]]; then
-    if grep -q '"next"' "$project_root/package.json" 2>/dev/null; then
-      detected+=("nextjs")
-    elif grep -q '"@nestjs/core"' "$project_root/package.json" 2>/dev/null; then
-      detected+=("nestjs")
-    else
-      detected+=("node")
-    fi
-  fi
-
-  # Scan subdirectories (backend/, frontend/, api/, web/, mobile/, etc.)
-  for subdir in backend frontend api web mobile apps services; do
-    local dir="$project_root/$subdir"
-    [[ -d "$dir" ]] || continue
-
-    # Python in subdirectory
-    if [[ -f "$dir/pyproject.toml" ]] || [[ -f "$dir/requirements.txt" ]] || [[ -f "$dir/manage.py" ]]; then
-      has_framework "python" || detected+=("python")
-    fi
-
-    # Node/Next.js/NestJS in subdirectory
-    if [[ -f "$dir/package.json" ]]; then
-      if grep -q '"next"' "$dir/package.json" 2>/dev/null; then
-        has_framework "nextjs" || detected+=("nextjs")
-      elif grep -q '"@nestjs/core"' "$dir/package.json" 2>/dev/null; then
-        has_framework "nestjs" || detected+=("nestjs")
-      else
-        has_framework "node" || detected+=("node")
-      fi
-    fi
-  done
-
-  # Print detected frameworks (handle empty array safely)
-  if [[ ${#detected[@]} -gt 0 ]]; then
-    printf '%s\n' "${detected[@]}"
-  fi
-}
+# shellcheck source=scripts/lib/detect-frameworks.sh
+source "$BLUEPRINT_RESOLVED/scripts/lib/detect-frameworks.sh"
 
 # Framework selection/validation only matters for the `adopt` action.
 # `--uninstall` and `--doctor` operate purely on $PROJECT_ROOT/.claude/ and
@@ -229,6 +180,16 @@ if [[ "$ACTION" == "adopt" ]]; then
     done < <(detect_frameworks "$PROJECT_ROOT")
 
     if [[ ${#FRAMEWORKS[@]} -eq 0 ]]; then
+      if [[ -f "$PROJECT_ROOT/nx.json" ]]; then
+        # nx.json has no glob field of its own (unlike lerna.json/
+        # pnpm-workspace.yaml, which detect_frameworks() already reads) —
+        # Nx discovers projects via per-project project.json files or
+        # plugin inference, which static config alone can't resolve to real
+        # directories. Give a specific, actionable message rather than the
+        # generic "no frameworks found", which would be misleading here —
+        # frameworks likely DO exist, they just can't be auto-located.
+        die "Detected an Nx workspace (nx.json) but couldn't resolve its project directories automatically — Nx doesn't declare a scannable glob pattern the way lerna.json/pnpm-workspace.yaml do. Use --frameworks to list them explicitly (e.g. --frameworks \"node,python\")."
+      fi
       die "Auto-detection found no frameworks. Use --framework or --frameworks to specify manually."
     fi
     log "Auto-detected ${#FRAMEWORKS[@]} framework(s): ${FRAMEWORKS[*]}"
@@ -264,397 +225,13 @@ if [[ "$ACTION" == "adopt" ]]; then
   fi
 fi
 
-# ---------- Smart CLAUDE.md merge ----------
-smart_merge_claude_md() {
-  local target_file="$1"
-  local source_file="$2"
-  local strategy="${3:-merge}"
+# ---------- CLAUDE.md smart-merge + composite generator ----------
 
-  # If target doesn't exist, this is a create, not a modification — --diff
-  # only applies to files that already exist and would change (see the doc's
-  # "Would create:" vs "Would modify:" distinction).
-  if [[ ! -f "$target_file" ]]; then
-    log "No existing CLAUDE.md — copying fresh"
-    if [[ $DRY_RUN -eq 1 ]]; then
-      printf '  DRY: cp %s %s\n' "$source_file" "$target_file"
-    else
-      cp "$source_file" "$target_file"
-    fi
-    return
-  fi
+# shellcheck source=scripts/lib/claude-md.sh
+source "$BLUEPRINT_RESOLVED/scripts/lib/claude-md.sh"
 
-  # Create timestamped backup
-  local timestamp
-  timestamp="$(date +%Y-%m-%d-%H%M%S)"
-  local backup_file="${target_file}.backup-${timestamp}"
-
-  if [[ $DRY_RUN -eq 1 ]]; then
-    printf '  DRY: cp %s %s\n' "$target_file" "$backup_file"
-  else
-    cp "$target_file" "$backup_file"
-    log "Created backup: $(basename "$backup_file")"
-  fi
-
-  # Handle strategy
-  case "$strategy" in
-    backup-only)
-      log "Strategy: backup-only — CLAUDE.md unchanged"
-      return
-      ;;
-    overwrite)
-      log "Strategy: overwrite — replacing entire CLAUDE.md"
-      if [[ $DRY_RUN -eq 1 ]]; then
-        printf '  DRY: cp %s %s (overwrite)\n' "$source_file" "$target_file"
-        if [[ $SHOW_DIFF -eq 1 ]]; then
-          diff -u "$target_file" "$source_file" | sed 's/^/    /' || true
-        fi
-      else
-        cp "$source_file" "$target_file"
-      fi
-      return
-      ;;
-    merge)
-      # Check if target has markers
-      if ! grep -q "<!-- BEGIN BLUEPRINT -->" "$target_file" || \
-         ! grep -q "<!-- END BLUEPRINT -->" "$target_file"; then
-        warn "Existing CLAUDE.md has no blueprint markers — treating as overwrite"
-        if [[ $DRY_RUN -eq 1 ]]; then
-          printf '  DRY: cp %s %s (no markers, overwrite)\n' "$source_file" "$target_file"
-          if [[ $SHOW_DIFF -eq 1 ]]; then
-            diff -u "$target_file" "$source_file" | sed 's/^/    /' || true
-          fi
-        else
-          cp "$source_file" "$target_file"
-        fi
-        return
-      fi
-
-      log "Strategy: merge — preserving user sections, updating blueprint sections"
-
-      # Always compute the merge result into a temp file — even in dry-run —
-      # so --diff can show the real result instead of just "would merge".
-      local tmp_merged
-      tmp_merged="$(mktemp)"
-      local tmp_before
-      tmp_before="$(mktemp)"
-      local tmp_after
-      tmp_after="$(mktemp)"
-      local tmp_blueprint
-      tmp_blueprint="$(mktemp)"
-
-      # Extract content before first marker from target
-      sed -n '1,/<!-- BEGIN BLUEPRINT -->/p' "$target_file" | sed '$d' > "$tmp_before"
-
-      # Extract content after last marker from target
-      sed -n '/<!-- END BLUEPRINT -->/,$p' "$target_file" | sed '1d' > "$tmp_after"
-
-      # Extract blueprint section from source (everything between markers, including markers)
-      sed -n '/<!-- BEGIN BLUEPRINT -->/,/<!-- END BLUEPRINT -->/p' "$source_file" > "$tmp_blueprint"
-
-      # Assemble merged file
-      cat "$tmp_before" > "$tmp_merged"
-      [[ -s "$tmp_before" ]] && echo "" >> "$tmp_merged"  # Add blank line if before section exists
-      cat "$tmp_blueprint" >> "$tmp_merged"
-      [[ -s "$tmp_after" ]] && echo "" >> "$tmp_merged"  # Add blank line if after section exists
-      cat "$tmp_after" >> "$tmp_merged"
-
-      rm -f "$tmp_before" "$tmp_after" "$tmp_blueprint"
-
-      if [[ $DRY_RUN -eq 1 ]]; then
-        if [[ $SHOW_DIFF -eq 1 ]]; then
-          printf '  DRY: Merge blueprint sections into %s\n' "$target_file"
-          diff -u "$target_file" "$tmp_merged" | sed 's/^/    /' || true
-        else
-          printf '  DRY: Merge blueprint sections into %s\n' "$target_file"
-        fi
-        rm -f "$tmp_merged"
-        return
-      fi
-
-      # Replace target with merged content
-      mv "$tmp_merged" "$target_file"
-
-      log "Merged blueprint sections into CLAUDE.md"
-      ;;
-  esac
-}
-
-# ---------- Composite CLAUDE.md generator ----------
-generate_claude_md() {
-  local frameworks=("$@")
-  local output="$PROJECT_ROOT/CLAUDE.md"
-
-  log "Generating CLAUDE.md for ${#frameworks[@]} framework(s)"
-
-  # Generate temporary source file
-  local tmp_source
-  tmp_source="$(mktemp)"
-
-  if [[ ${#frameworks[@]} -eq 1 ]]; then
-    # Single framework - use template directly
-    local template="$BLUEPRINT_RESOLVED/templates/CLAUDE.md.${frameworks[0]}"
-    if [[ -f "$template" ]]; then
-      cp "$template" "$tmp_source"
-    else
-      warn "No template found for ${frameworks[0]}"
-      rm -f "$tmp_source"
-      return
-    fi
-  else
-    # Multiple frameworks - generate composite
-    if [[ $DRY_RUN -eq 1 ]]; then
-      printf '  DRY: Generate composite CLAUDE.md for: %s\n' "${frameworks[*]}"
-      rm -f "$tmp_source"
-      return
-    fi
-
-    cat > "$tmp_source" <<'EOF'
-# Claude Code Configuration — Monorepo
-
-## Workspace Detection
-
-This monorepo contains multiple frameworks. Before working on any ticket:
-
-1. **Identify affected workspace(s)** from ticket labels/description
-2. **Read workspace-specific conventions** below
-3. **Use workspace-appropriate tooling** (package manager, test runner, linter)
-4. **Run tests scoped to changed workspace(s)** only
-5. **Coordinate with other agents** for cross-workspace changes
-
----
-
-EOF
-
-    # Append each framework section
-    for fw in "${frameworks[@]}"; do
-      local template="$BLUEPRINT_RESOLVED/templates/CLAUDE.md.$fw"
-
-      if [[ ! -f "$template" ]]; then
-        warn "No template found for $fw at $template, skipping"
-        continue
-      fi
-
-      # Detect likely workspace path
-      local workspace_path=""
-      case "$fw" in
-        python)
-          [[ -d "$PROJECT_ROOT/backend" ]] && workspace_path="backend/"
-          [[ -z "$workspace_path" && -d "$PROJECT_ROOT/api" ]] && workspace_path="api/"
-          ;;
-        nextjs|node)
-          [[ -d "$PROJECT_ROOT/frontend" ]] && workspace_path="frontend/"
-          [[ -z "$workspace_path" && -d "$PROJECT_ROOT/web" ]] && workspace_path="web/"
-          ;;
-        nestjs)
-          [[ -d "$PROJECT_ROOT/backend" ]] && workspace_path="backend/"
-          [[ -z "$workspace_path" && -d "$PROJECT_ROOT/api" ]] && workspace_path="api/"
-          ;;
-      esac
-
-      echo "## Workspace: $fw${workspace_path:+ ($workspace_path)}" >> "$tmp_source"
-      echo "" >> "$tmp_source"
-
-      # Inject framework name from first line of template
-      local framework_name
-      framework_name="$(head -n1 "$template" | sed 's/# Claude Code Configuration — //')"
-      echo "**Framework:** $framework_name" >> "$tmp_source"
-      echo "" >> "$tmp_source"
-
-      # Append template content (skip first line)
-      tail -n +2 "$template" >> "$tmp_source"
-
-      echo "" >> "$tmp_source"
-      echo "---" >> "$tmp_source"
-      echo "" >> "$tmp_source"
-    done
-
-    # Shared conventions footer
-    cat >> "$tmp_source" <<'EOF'
-## Shared Conventions (All Workspaces)
-
-**Behavioral rules (always enforced):**
-- Do what was asked — nothing more, nothing less
-- NEVER create files unless necessary; prefer editing existing ones
-- NEVER create docs/*.md/README files unless explicitly requested
-- ALWAYS read a file before editing it
-- NEVER commit secrets, credentials, or .env* files
-
-**TDD workflow (mandatory):**
-1. Failing test first
-2. Minimum implementation to pass
-3. Refactor with tests green
-
-**Cross-workspace coordination:**
-- If you change API contracts, notify affected agents via memory MCP
-- If you modify shared types/schemas, run all workspace tests
-- If unclear which workspace to modify, ask the architect agent
-EOF
-  fi
-
-  # Apply smart merge strategy
-  smart_merge_claude_md "$output" "$tmp_source" "$MERGE_STRATEGY"
-
-  # Cleanup temp file
-  rm -f "$tmp_source"
-}
-
-# ---------- Merged pre-commit config generator ----------
-generate_precommit_config() {
-  local frameworks=("$@")
-  local output="$PROJECT_ROOT/.pre-commit-config.yaml"
-
-  if [[ -f "$output" ]]; then
-    log "Existing .pre-commit-config.yaml preserved"
-    return
-  fi
-
-  # --precommit-template overrides auto-detection entirely. Warn (don't fail)
-  # if the override doesn't match any detected framework — the user may
-  # deliberately want e.g. Node linters in a Python-only repo.
-  if [[ -n "$PRECOMMIT_TEMPLATE" ]]; then
-    local template_matches=0
-    for fw in "${frameworks[@]}"; do
-      case "$PRECOMMIT_TEMPLATE:$fw" in
-        python:python|python:nestjs|node:node|node:nextjs|node:nestjs) template_matches=1 ;;
-        merged:*) template_matches=1 ;;
-      esac
-    done
-    [[ $template_matches -eq 1 ]] || warn "--precommit-template $PRECOMMIT_TEMPLATE does not match detected framework(s) (${frameworks[*]}) — using it anyway since it was explicitly requested."
-
-    if [[ "$PRECOMMIT_TEMPLATE" == "python" || "$PRECOMMIT_TEMPLATE" == "node" ]]; then
-      local PC_SRC="$BLUEPRINT_RESOLVED/pre-commit/.pre-commit-config.${PRECOMMIT_TEMPLATE}.yaml"
-      if [[ -f "$PC_SRC" ]]; then
-        if [[ $DRY_RUN -eq 1 ]]; then
-          printf '  DRY: cp %s %s (forced by --precommit-template)\n' "$PC_SRC" "$output"
-        else
-          cp "$PC_SRC" "$output"
-        fi
-      else
-        die "Template not found: $PC_SRC"
-      fi
-      return
-    fi
-    # PRECOMMIT_TEMPLATE == "merged" falls through to the merge generator below,
-    # forcing both has_python and has_node on regardless of detected frameworks.
-  elif [[ ${#frameworks[@]} -eq 1 ]]; then
-    # No override, single framework - use existing logic
-    local PC_SRC=""
-    case "${frameworks[0]}" in
-      python) PC_SRC="$BLUEPRINT_RESOLVED/pre-commit/.pre-commit-config.python.yaml" ;;
-      node|nextjs|nestjs) PC_SRC="$BLUEPRINT_RESOLVED/pre-commit/.pre-commit-config.node.yaml" ;;
-    esac
-    if [[ -n "$PC_SRC" && -f "$PC_SRC" ]]; then
-      if [[ $DRY_RUN -eq 1 ]]; then
-        printf '  DRY: cp %s %s\n' "$PC_SRC" "$output"
-      else
-        cp "$PC_SRC" "$output"
-      fi
-    fi
-    return
-  fi
-
-  # Multiple frameworks (or --precommit-template merged) - generate merged config
-  log "Generating merged pre-commit config${PRECOMMIT_TEMPLATE:+ (forced by --precommit-template merged)}"
-
-  if [[ $DRY_RUN -eq 1 ]]; then
-    printf '  DRY: Generate merged .pre-commit-config.yaml\n'
-    return
-  fi
-
-  local has_python=0
-  local has_node=0
-
-  if [[ "$PRECOMMIT_TEMPLATE" == "merged" ]]; then
-    has_python=1
-    has_node=1
-  else
-    for fw in "${frameworks[@]}"; do
-      case "$fw" in
-        python|nestjs) has_python=1 ;;
-        node|nextjs) has_node=1 ;;
-      esac
-    done
-  fi
-
-  # Detect workspace paths for filters
-  local backend_path=""
-  local frontend_path=""
-
-  [[ -d "$PROJECT_ROOT/backend" ]] && backend_path="backend/"
-  [[ -d "$PROJECT_ROOT/api" ]] && backend_path="${backend_path:-api/}"
-  [[ -d "$PROJECT_ROOT/frontend" ]] && frontend_path="frontend/"
-  [[ -d "$PROJECT_ROOT/web" ]] && frontend_path="${frontend_path:-web/}"
-
-  cat > "$output" <<'YAML'
-# Merged pre-commit configuration for monorepo
-# Generated by adopt.sh
-repos:
-YAML
-
-  # Python hooks
-  if [[ $has_python -eq 1 ]]; then
-    cat >> "$output" <<YAML
-  # Python hooks${backend_path:+ (${backend_path} only)}
-  - repo: https://github.com/psf/black
-    rev: 24.4.0
-    hooks:
-      - id: black
-${backend_path:+        files: ^${backend_path}}
-
-  - repo: https://github.com/PyCQA/flake8
-    rev: 7.0.0
-    hooks:
-      - id: flake8
-${backend_path:+        files: ^${backend_path}}
-
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-${backend_path:+        files: ^${backend_path}}
-
-YAML
-  fi
-
-  # Node hooks
-  if [[ $has_node -eq 1 ]]; then
-    cat >> "$output" <<YAML
-  # JavaScript/TypeScript hooks${frontend_path:+ (${frontend_path} only)}
-  - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: v9.0.0
-    hooks:
-      - id: eslint
-${frontend_path:+        files: ^${frontend_path}}
-        types: [file]
-        types_or: [javascript, jsx, ts, tsx]
-
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v4.0.0
-    hooks:
-      - id: prettier
-${frontend_path:+        files: ^${frontend_path}}
-        types_or: [javascript, jsx, ts, tsx, json, yaml, markdown]
-
-YAML
-  fi
-
-  # Shared hooks
-  cat >> "$output" <<'YAML'
-  # Shared hooks (all files)
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.0
-    hooks:
-      - id: gitleaks
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-added-large-files
-YAML
-}
+# shellcheck source=scripts/lib/precommit-config.sh
+source "$BLUEPRINT_RESOLVED/scripts/lib/precommit-config.sh"
 
 # ---------- Dispatch ----------
 case "$ACTION" in
